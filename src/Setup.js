@@ -165,6 +165,9 @@ function onOpen() {
       .addItem('初期化＋サンプル投入', 'setupWithSampleData')
       .addItem('初期化のみ', 'ensureSetup_')
       .addSeparator()
+      .addItem('マスターを今すぐ取り込み', 'importMastersNow')
+      .addItem('1日1回の自動取込を設定', 'createMasterDailyTrigger')
+      .addSeparator()
       .addItem('Gemini APIキーを設定', 'setGeminiApiKeyPrompt')
       .addToUi();
   } catch (err) {

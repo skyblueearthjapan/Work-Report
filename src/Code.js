@@ -8,6 +8,11 @@
 
 /** Web アプリのエントリ。index.html を返す。 */
 function doGet(e) {
+  // 診断: 外部マスターの構造確認（?inspect=master）
+  if (e && e.parameter && e.parameter.inspect === 'master') {
+    return ContentService.createTextOutput(inspectMaster_())
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   ensureSetup_(); // 初回アクセス時にシート・フォルダを用意
   var tmpl = HtmlService.createTemplateFromFile('index');
   tmpl.boot = getBootData_(); // 初期表示に必要なデータを埋め込む
@@ -33,6 +38,7 @@ function getBootData_() {
     company: getCompany(),
     folderUrl: getAppFolderUrl(),
     geminiEnabled: isGeminiEnabled(),
+    master: getMasterData(),
     today: todayStr_()
   };
 }

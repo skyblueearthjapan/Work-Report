@@ -11,6 +11,16 @@
   var COMPANY = BOOT.company || { companyLW: 'LINE W', companyTS: 'テクノサービス' };
   var TODAY = BOOT.today || '2026-06-30';
   var WT = ['据付', '移設', '納品', '点検', '改造', '修理', '調査'];
+  var MASTER = BOOT.master || { kobans: [], staff: [], depts: [], importedAt: '' };
+
+  // 工番マスタから該当工番を検索（前後空白無視）
+  function masterKoban(koban) {
+    var k = String(koban || '').trim();
+    if (!k) return null;
+    var list = MASTER.kobans || [];
+    for (var i = 0; i < list.length; i++) if (String(list[i].koban).trim() === k) return list[i];
+    return null;
+  }
 
   /* ---------------- state ---------------- */
   var S = {
@@ -339,6 +349,10 @@
     var draftBadge = draftIsLW ? "font:800 12px 'Noto Sans JP',sans-serif;color:#fff;background:var(--primary);padding:5px 12px;border-radius:8px" : "font:800 12px 'Noto Sans JP',sans-serif;color:var(--primary);background:#fff;border:1.5px solid var(--primary);padding:4px 12px;border-radius:8px";
     var f = function (name) { return esc(nf[name]); };
     var input = function (name, ph, type, req) { return '<input class="req"' + chg('nf', { name: name }) + ' value="' + f(name) + '"' + (type ? ' type="' + type + '"' : '') + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' style="' + inpStyle + '">'; };
+    // 工番マスタの候補（datalist）。選択で 納品先/住所/装置名 を自動補完
+    var kobanDatalist = '<datalist id="kobanList">' + (MASTER.kobans || []).map(function (k) {
+      return '<option value="' + esc(k.koban) + '">' + esc([k.nohinSaki, k.kishu].filter(Boolean).join(' / ')) + '</option>';
+    }).join('') + '</datalist>';
 
     var statusBlock = isEditing ? ('<div style="' + secLabel + '">ステータス</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:18px;display:flex;gap:9px">' +
       ['未着手', '作業中', '完了'].map(function (st) { var on = nf.status === st; return '<button' + act('setNewStatus', { val: st }) + ' style="flex:1;height:46px;border-radius:11px;cursor:pointer;font:700 14px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--text)') + '">' + st + '</button>'; }).join('') + '</div>') : '';
@@ -360,7 +374,10 @@
       '<div><label style="' + labStyle + '">指示書メモ（任意）</label><textarea' + chg('nf', { name: 'shijiNaiyou' }) + ' placeholder="作業者への補足メモ" style="' + taSm + '">' + f('shijiNaiyou') + '</textarea></div></div>' +
       // 工番
       '<div style="' + secLabel + '">工番情報</div><div style="' + cardStyle + '">' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">工番　№ <span style="color:#c0392b">必須</span></label>' + input('koban', draftIsLW ? '例：LW25083' : '例：TS26052') + '</div>' +
+      kobanDatalist +
+      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">工番　№ <span style="color:#c0392b">必須</span></label>' +
+      '<input class="req" list="kobanList"' + chg('nf', { name: 'koban' }) + ' value="' + f('koban') + '" placeholder="' + esc(draftIsLW ? '例：LW25083（入力で候補・自動補完）' : '例：TS26052') + '" style="' + inpStyle + '">' +
+      '<div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-top:5px">工番を選ぶと 納品先・住所・装置名 を自動補完します。</div></div>' +
       '<div style="flex:1"><label style="' + labStyle + '">元工番</label>' + input('motoKoban', '例：LW24310') + '</div></div>' +
       '<div><label style="' + labStyle + '">工番名（作業内容の概要）</label>' + input('kobanName', '例：3m切断走行 据付') + '</div></div>' +
       // お客様
@@ -981,7 +998,21 @@
 
   /* ---------------- change dispatch ---------------- */
   var CHANGES = {
-    nf: function (d, val) { setState(function (s) { return { newForm: Object.assign({}, s.newForm, wrapKey(d.name, val)), nfError: false }; }); },
+    nf: function (d, val) {
+      setState(function (s) {
+        var patch = wrapKey(d.name, val);
+        // 工番選択で 納品先/住所/装置名 を自動補完（マスターに値がある項目のみ上書き）
+        if (d.name === 'koban') {
+          var mk = masterKoban(val);
+          if (mk) {
+            if (mk.nohinSaki) patch.nohinSaki = mk.nohinSaki;
+            if (mk.basho) patch.basho = mk.basho;
+            if (mk.kishu) patch.kishu = mk.kishu;
+          }
+        }
+        return { newForm: Object.assign({}, s.newForm, patch), nfError: false };
+      });
+    },
     report: function (d, val) { mutateCase(function (o) { return Object.assign({}, o, wrapKey(d.name, val)); }); },
     settings: function (d, val) { setState(function (s) { return { settings: Object.assign({}, s.settings, wrapKey(d.name, val)), settingsSaved: false }; }); },
     staffName: function (d, val) { var si = +d.si; mutate(d.scope, function (o) { return Object.assign({}, o, { staff: o.staff.map(function (st, i) { return i === si ? Object.assign({}, st, { name: val }) : st; }) }); }); },
