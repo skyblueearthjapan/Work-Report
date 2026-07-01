@@ -169,6 +169,7 @@ function onOpen() {
       .addItem('マスターを今すぐ取り込み', 'importMastersNow')
       .addItem('1日1回の自動取込を設定', 'createMasterDailyTrigger')
       .addSeparator()
+      .addItem('VPS連携 APIトークンを発行/表示', 'setupApiTokenPrompt')
       .addItem('Gemini APIキーを設定', 'setGeminiApiKeyPrompt')
       .addToUi();
   } catch (err) {

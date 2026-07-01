@@ -178,6 +178,25 @@ function stampKanin(id, name) {
   return true;
 }
 
+/* ---------------- マスター（外部シートのミラー） ---------------- */
+function getMaster() {
+  const row = db.prepare('SELECT value FROM meta WHERE key=?').get('master');
+  if (!row) return { kobans: [], staff: [], depts: [], importedAt: '' };
+  try { return JSON.parse(row.value); } catch (e) { return { kobans: [], staff: [], depts: [], importedAt: '' }; }
+}
+function setMaster(obj) {
+  const val = JSON.stringify(obj || { kobans: [], staff: [], depts: [], importedAt: nowStamp() });
+  db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('master', val);
+  return getMaster();
+}
+
+/* ---------------- メール差込 ---------------- */
+function fmtDateJp(d) { if (!d) return ''; const p = String(d).split('-'); return p.length >= 2 ? p.join('/') : String(d); }
+function fillTemplate(str, c) {
+  if (!str) return '';
+  return String(str).replace(/\{工番\}/g, (c && c.koban) || '').replace(/\{お客様名\}/g, (c && c.nohinSaki) || '').replace(/\{作業日\}/g, (c && fmtDateJp(c.yoteibi)) || '');
+}
+
 /* ---------------- 初期データ ---------------- */
 function seedSampleDataIfEmpty() {
   const n = db.prepare('SELECT COUNT(*) c FROM cases').get().c;
@@ -191,5 +210,6 @@ function seedSampleDataIfEmpty() {
 module.exports = {
   defaultSettings, getSettings, saveSettings, defaultConfirm,
   getAppState, getCases, getHistory, getCase, saveCase, duplicateCase, deleteCase, closeCase, stampKanin,
+  getMaster, setMaster, fillTemplate,
   seedSampleDataIfEmpty
 };

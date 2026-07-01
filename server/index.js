@@ -7,11 +7,32 @@
 const path = require('path');
 const express = require('express');
 const store = require('./store');
+const { gasCall, gasConfigured } = require('./gas');
 
 const app = express();
 const PORT = process.env.PORT || 5174;
 
 app.use(express.json({ limit: '30mb' })); // 署名dataURL・音声・PDFの受け渡しを見越して
+
+// GAS 委譲に渡す案件メタ（フォルダ名/ファイル名生成に必要な最小限）
+function caseMeta(c) {
+  return { koban: c.koban || '', nohinSaki: c.nohinSaki || '', yoteibi: c.yoteibi || '', closedAt: c.closedAt || '', kishu: c.kishu || '', driveFolderId: c.driveFolderId || '' };
+}
+function normalizeRecipients(s) {
+  return String(s || '').split(/[,;\s]+/).map(x => x.trim()).filter(x => x && x.indexOf('@') !== -1).join(',');
+}
+function pdfBaseName(c) {
+  const safe = x => String(x || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+  const d = c.yoteibi || c.closedAt || require('./util').todayStr();
+  return ['作業報告書', safe(c.nohinSaki), safe(c.kishu), safe(c.koban), safe(d)].filter(Boolean).join('_');
+}
+// 非同期ハンドラ（GAS呼び出し用）
+function ha(fn) {
+  return async (req, res) => {
+    try { const out = await fn(req, res); res.json(out === undefined ? { ok: true } : out); }
+    catch (e) { console.error(e); res.status(400).json({ error: (e && e.message) || String(e) }); }
+  };
+}
 
 // 初回起動時、案件が空ならサンプル投入
 try {
@@ -44,25 +65,67 @@ app.get('/api/boot', h(() => {
     historyCount: st.historyCount,
     settings: settings,
     company: { companyLW: settings.companyLW || 'LINE W', companyTS: settings.companyTS || 'テクノサービス' },
-    master: (typeof store.getMasterData === 'function' ? store.getMasterData() : { kobans: [], staff: [], depts: [], importedAt: '' }),
+    master: store.getMaster(),
     geminiEnabled: !!process.env.GEMINI_API_KEY,
-    folderUrl: '',
+    folderUrl: process.env.DRIVE_FOLDER_URL || '',
     today: require('./util').todayStr()
   };
 }));
 
-// 署名保存（V2: SQLiteにインライン保持。V3でDriveにも保管）
-app.post('/api/cases/:id/signature', h(req => {
+// 署名保存（GAS経由でDrive案件フォルダへ。未設定時はSQLiteインラインのみ）
+app.post('/api/cases/:id/signature', ha(async req => {
+  const id = req.params.id;
   const dataUrl = (req.body && req.body.dataUrl) || '';
-  store.saveCase({ id: req.params.id, signature: dataUrl });
+  const c = store.getCase(id);
+  if (!c) throw new Error('案件が見つかりません: ' + id);
+  if (gasConfigured()) {
+    const r = await gasCall('saveSignature', { meta: caseMeta(c), dataUrl });
+    store.saveCase({ id, signature: dataUrl, signatureFileId: r.fileId, driveFolderId: r.folderId });
+    return { url: dataUrl, fileId: r.fileId };
+  }
+  store.saveCase({ id, signature: dataUrl });
   return { url: dataUrl, fileId: '' };
 }));
 
-// PDFバックアップ（V2: no-op。V3でGAS経由Driveへ保管）
-app.post('/api/cases/:id/pdf', h(() => ({ ok: true, note: 'V3でDrive保管に接続' })));
+// PDFバックアップ（クローズ時。GAS経由でDrive案件フォルダへ保管）
+app.post('/api/cases/:id/pdf', ha(async req => {
+  const id = req.params.id;
+  const pdfBase64 = (req.body && req.body.pdfBase64) || '';
+  const c = store.getCase(id);
+  if (!c) throw new Error('案件が見つかりません: ' + id);
+  if (gasConfigured() && pdfBase64) {
+    const r = await gasCall('saveReportPdf', { meta: caseMeta(c), pdfBase64 });
+    store.saveCase({ id, pdfFileId: r.fileId, driveFolderId: r.folderId });
+    return { ok: true, fileId: r.fileId };
+  }
+  return { ok: true, note: gasConfigured() ? 'no pdf data' : 'GAS未設定のためスキップ' };
+}));
 
-// メール送信（V3でGAS経由Gmailに接続）
-app.post('/api/cases/:id/mail', h(() => { throw new Error('メール送信はV3で有効化されます'); }));
+// メール送信（GAS経由 Gmail。保管PDFを添付、設定の宛先TO/CCへ）
+app.post('/api/cases/:id/mail', ha(async req => {
+  const id = req.params.id;
+  const c = store.getCase(id);
+  if (!c) throw new Error('案件が見つかりません: ' + id);
+  if (!gasConfigured()) throw new Error('メール送信はGAS連携設定後に有効になります');
+  if (!c.pdfFileId) throw new Error('PDFが未生成のため送信できません');
+  const s = store.getSettings();
+  const to = normalizeRecipients(s.email);
+  const cc = normalizeRecipients(s.cc);
+  if (!to) throw new Error('送信先(TO)が未設定です');
+  const subject = store.fillTemplate(s.subject, c) || ('作業報告書 ' + (c.koban || ''));
+  const body = store.fillTemplate(s.body, c);
+  await gasCall('sendMail', { to, cc, subject, body, pdfFileId: c.pdfFileId, fileName: pdfBaseName(c) + '.pdf' });
+  store.saveCase({ id, status: c.status === 'クローズ' ? c.status : '完了' });
+  return { ok: true, to, cc };
+}));
+
+// マスター取込（GAS経由で外部シート→SQLiteミラー）
+app.post('/api/master/refresh', ha(async () => {
+  if (!gasConfigured()) throw new Error('GAS連携が未設定です');
+  const m = await gasCall('refreshMaster');
+  store.setMaster(m);
+  return { kobans: (m.kobans || []).length, staff: (m.staff || []).length, depts: (m.depts || []).length, importedAt: m.importedAt };
+}));
 
 // 案件
 app.get('/api/cases/:id', h(req => store.getCase(req.params.id)));
@@ -86,5 +149,15 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   res.sendFile(path.join(WEB_DIR, 'index.html'));
 });
+
+// 毎日 6:07(JST) に外部マスターを取り込み（GAS連携時のみ）
+try {
+  const cron = require('node-cron');
+  cron.schedule('7 6 * * *', async () => {
+    if (!gasConfigured()) return;
+    try { const m = await gasCall('refreshMaster'); store.setMaster(m); console.log('[worklog] master refreshed (cron)'); }
+    catch (e) { console.error('[worklog] master cron error', e); }
+  }, { timezone: 'Asia/Tokyo' });
+} catch (e) { console.error('[worklog] cron init skipped', e); }
 
 app.listen(PORT, '0.0.0.0', () => console.log('[worklog] listening on http://0.0.0.0:' + PORT));

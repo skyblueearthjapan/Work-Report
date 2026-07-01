@@ -25,6 +25,10 @@ db.exec(`
     key   TEXT PRIMARY KEY,
     value TEXT
   );
+  CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT           -- マスターミラー等の付帯データを JSON で保持
+  );
 `);
 
 module.exports = db;

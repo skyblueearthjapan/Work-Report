@@ -6,21 +6,19 @@
  *       design/untitled/project/作業報告書アプリ.dc.html（UI/ロジックの正）
  */
 
-/** Web アプリのエントリ。index.html を返す。 */
-function doGet(e) {
-  // 診断: 外部マスターの構造確認（?inspect=master）
-  if (e && e.parameter && e.parameter.inspect === 'master') {
-    return ContentService.createTextOutput(inspectMaster_())
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-  ensureSetup_(); // 初回アクセス時にシート・フォルダを用意
-  var tmpl = HtmlService.createTemplateFromFile('index');
-  tmpl.boot = getBootData_(); // 初期表示に必要なデータを埋め込む
-  return tmpl
-    .evaluate()
-    .setTitle('デジタル作業報告書')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+/**
+ * この GAS は VPS アプリ（https://lineworks.tailaa1b31.ts.net）の
+ * Google 操作（Drive保管・メール送信・マスター取込）専用の API になりました。
+ * UI は VPS 側にあります。ここ（doGet）は機密を返さない案内のみ。
+ * 実処理は doPost（トークン認証）で受けます。
+ */
+function doGet() {
+  ensureSetup_(); // シート・フォルダの存在を保証（データは返さない）
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:24px">' +
+    '<h3>作業報告書 API</h3><p>この URL は VPS アプリ用の API エンドポイントです。' +
+    'アプリ本体は <a href="https://lineworks.tailaa1b31.ts.net">https://lineworks.tailaa1b31.ts.net</a> をご利用ください。</p>'
+  ).setTitle('作業報告書 API');
 }
 
 /** HTML から他ファイルを取り込む（<?!= include('css') ?>）。 */
