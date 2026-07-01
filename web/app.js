@@ -83,7 +83,8 @@
     saveReportPdf: function (id, b64) { return _http('POST', '/api/cases/' + encodeURIComponent(id) + '/pdf', { pdfBase64: b64 }); },
     sendReportMail: function (id) { return _http('POST', '/api/cases/' + encodeURIComponent(id) + '/mail'); },
     aiFormatShori: function (text) { return _http('POST', '/api/ai/format', { text: text }).then(function (r) { return r.text; }); },
-    aiReadPlate: function (image) { return _http('POST', '/api/ai/plate', { image: image }); }
+    aiReadPlate: function (image) { return _http('POST', '/api/ai/plate', { image: image }); },
+    aiTranscribe: function (audio, mime) { return _http('POST', '/api/ai/transcribe', { audio: audio, mime: mime }).then(function (r) { return r.text; }); }
   };
   function server(fn) {
     var args = [].slice.call(arguments, 1);
@@ -1146,18 +1147,46 @@
     c.addEventListener('pointerdown', down); c.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
-  /* ---------------- voice (Web Speech, mock整形) ---------------- */
-  var _rec = null;
-  function stopRec() { if (_rec) { try { _rec.stop(); } catch (e) {} _rec = null; } }
+  /* ---------------- voice (MediaRecorder → Gemini 文字起こし) ---------------- */
+  // VPSは公開HTTPS(Funnel)なので getUserMedia が使える。録音→サーバーでGemini文字起こし＆整形。
+  var _mediaRec = null, _chunks = [], _stream = null;
+  function stopStream() { if (_stream) { try { _stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} _stream = null; } }
+  function stopRec() { if (_mediaRec && _mediaRec.state !== 'inactive') { try { _mediaRec.stop(); } catch (e) {} } _mediaRec = null; stopStream(); }
+  function blobToDataUrl(blob) { return new Promise(function (res) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.readAsDataURL(blob); }); }
   function toggleListen() {
-    if (S.vListening) { stopRec(); setState({ vListening: false }); return; }
-    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setState({ vError: 'このブラウザは音声認識に対応していません。テキストで入力するか、対応ブラウザ（Chrome等）をご利用ください。' }); return; }
-    var rec = new SR(); _rec = rec; rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true;
-    rec.onresult = function (e) { var fin = '', itm = ''; for (var i = e.resultIndex; i < e.results.length; i++) { var t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else itm += t; } if (fin) setState({ vRaw: (S.vRaw + fin).trim(), vInterim: '' }); else setState({ vInterim: itm }); };
-    rec.onerror = function (e) { var er = e.error || 'unknown'; var msg = (er === 'not-allowed' || er === 'service-not-allowed') ? 'マイクが使用できませんでした。下の入力欄に直接テキストを入力して「AIで整える」をお試しください。' : '音声認識エラー：' + er + '。下の入力欄に直接入力もできます。'; setState({ vError: msg, vListening: false }); };
-    rec.onend = function () { if (S.vListening) { try { rec.start(); } catch (e) {} } };
-    setState({ vError: '', vListening: true }); try { rec.start(); } catch (e) {}
+    if (S.vListening) { // 停止 → 文字起こし
+      try { if (_mediaRec && _mediaRec.state !== 'inactive') _mediaRec.stop(); } catch (e) {}
+      setState({ vListening: false });
+      return;
+    }
+    if (!BOOT.geminiEnabled) { setState({ vError: 'AI(Gemini)が未設定です。下の入力欄にキーボードの音声入力で入力し「AIで整える」をお試しください。' }); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+      setState({ vError: 'この端末は録音に非対応です。下の入力欄にキーボードの音声入力で入力してください。' }); return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      _stream = stream; _chunks = [];
+      var mime = (window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm')) ? 'audio/webm' : '';
+      _mediaRec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      _mediaRec.ondataavailable = function (e) { if (e.data && e.data.size) _chunks.push(e.data); };
+      _mediaRec.onstop = function () {
+        stopStream();
+        var blob = new Blob(_chunks, { type: (_mediaRec && _mediaRec.mimeType) || 'audio/webm' });
+        if (!blob.size) { setState({ vProcessing: false }); return; }
+        setState({ vProcessing: true, vResult: '' });
+        blobToDataUrl(blob).then(function (dataUrl) {
+          return server('aiTranscribe', dataUrl, blob.type);
+        }).then(function (text) {
+          setState({ vProcessing: false, vResult: text || '' });
+        }).catch(function (e) {
+          setState({ vProcessing: false, vError: '音声の文字起こしに失敗しました：' + errMsg(e) });
+        });
+      };
+      setState({ vError: '', vListening: true });
+      _mediaRec.start();
+    }).catch(function (e) {
+      var msg = (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) ? 'マイクの使用が許可されませんでした。ブラウザのマイク許可をオンにするか、下の入力欄にキーボードの音声入力で入力してください。' : 'マイクを開始できませんでした：' + errMsg(e);
+      setState({ vError: msg, vListening: false });
+    });
   }
   function mockSummarize(raw) {
     var t = (raw || '').replace(/[\s　]+/g, '').replace(/(えーと|あのー|あの|まあ|なんか|そのー|えっと)/g, '');

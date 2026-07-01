@@ -8,6 +8,7 @@ const path = require('path');
 const express = require('express');
 const store = require('./store');
 const { gasCall, gasConfigured } = require('./gas');
+const ai = require('./ai');
 
 const app = express();
 const PORT = process.env.PORT || 5174;
@@ -118,6 +119,11 @@ app.post('/api/cases/:id/mail', ha(async req => {
   store.saveCase({ id, status: c.status === 'クローズ' ? c.status : '完了' });
   return { ok: true, to, cc };
 }));
+
+// AI（Gemini）: 音声文字起こし・処置整形・銘板OCR
+app.post('/api/ai/transcribe', ha(async req => ({ text: await ai.transcribe((req.body && req.body.audio) || '', (req.body && req.body.mime) || 'audio/webm') })));
+app.post('/api/ai/format', ha(async req => ({ text: await ai.formatShori((req.body && req.body.text) || '') })));
+app.post('/api/ai/plate', ha(async req => await ai.readPlate((req.body && req.body.image) || '')));
 
 // マスター取込（GAS経由で外部シート→SQLiteミラー）
 app.post('/api/master/refresh', ha(async () => {
