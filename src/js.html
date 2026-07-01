@@ -1,0 +1,12 @@
+<script>
+  // Section 2 で全画面のフロント状態機械を実装。
+  // 現在は doGet が埋め込んだ初期データ(window.BOOT)を表示して疎通確認する。
+  (function () {
+    var boot = window.BOOT || {};
+    var status = document.getElementById('status');
+    var dump = document.getElementById('dump');
+    var caseCount = (boot.cases || []).length;
+    status.textContent = '疎通OK ・ 案件 ' + caseCount + ' 件 ／ today=' + (boot.today || '-');
+    dump.textContent = JSON.stringify(boot, null, 2);
+  })();
+</script>

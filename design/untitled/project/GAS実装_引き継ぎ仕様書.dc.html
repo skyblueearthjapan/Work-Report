@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9ebf0}
+  @media print{ @page{size:A4;margin:14mm} body{background:#fff} .sheet{box-shadow:none!important;margin:0!important;width:100%!important} .pb{page-break-before:always} }
+</style>
+</helmet>
+<div style="background:#e9ebf0;padding:34px 0;font-family:'Noto Sans JP',sans-serif;color:#1b2330">
+  <div class="sheet" style="width:860px;max-width:94%;margin:0 auto;background:#fff;box-shadow:0 12px 40px rgba(16,24,40,.14);padding:54px 60px 70px">
+
+    <!-- COVER -->
+    <div style="border-bottom:4px solid #1d3b63;padding-bottom:22px;margin-bottom:30px">
+      <div style="font:700 13px 'Noto Sans JP',sans-serif;color:#1d3b63;letter-spacing:.18em;margin-bottom:12px">DEVELOPER HANDOFF / 開発引き継ぎ仕様書</div>
+      <div style="font:900 30px/1.4 'Noto Sans JP',sans-serif;color:#13284a">デジタル作業報告書アプリ<br>Google Apps Script 実装仕様</div>
+      <div style="font:500 13.5px/1.8 'Noto Sans JP',sans-serif;color:#6b7480;margin-top:16px">本書は、HTMLで作成したインタラクティブ・プロトタイプ（作業報告書アプリ.dc.html）を、GAS（Google Apps Script）アプリとして本実装するための引き継ぎ資料です。画面・データモデル・業務ルール・モック箇所と本実装の対応・推奨アーキテクチャをまとめています。</div>
+      <div style="display:flex;gap:30px;margin-top:20px;font:600 12px 'Noto Sans JP',sans-serif;color:#6b7480">
+        <div>対象工番：<b style="color:#1b2330">LW工番（LINE W／製品・本工番）／ TS工番（テクノサービス／サービス工番）</b></div>
+      </div>
+      <div style="font:600 12px 'Noto Sans JP',sans-serif;color:#6b7480;margin-top:6px">主端末：現場＝タブレット縦／管理＝PC（レスポンシブ対応済み）</div>
+    </div>
+
+    <!-- 0. プロトタイプの位置づけ -->
+    <div style="background:#fdf0dd;border:1px solid #f0d49a;border-radius:12px;padding:16px 18px;margin-bottom:30px">
+      <div style="font:800 14px 'Noto Sans JP',sans-serif;color:#8a5a0e;margin-bottom:6px">⚠ 重要：プロトタイプの位置づけ</div>
+      <div style="font:500 13px/1.85 'Noto Sans JP',sans-serif;color:#5a4a2e">プロトタイプは<b>UI/UX・画面遷移・PDFレイアウト・業務ルールの「正解」を示す参照実装</b>です。ブラウザ用のフロントエンド（React系）で書かれており、<b>そのままGASでは動きません</b>。本書に沿って、画面はHtmlService用HTML/JSへ移植し、データ保存・PDF・メール・AIはGASのサーバ側で実装してください。配色・余白・項目配置・文言はプロトタイプを正とします。</div>
+    </div>
+
+    <!-- 1. 画面一覧 -->
+    <div style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin-bottom:16px">1. 画面一覧と遷移</div>
+    <div style="font:500 13px/1.9 'Noto Sans JP',sans-serif;color:#3a4253;margin-bottom:14px">全9画面。管理者（PC）と現場作業者（タブレット）が同一アプリを利用。</div>
+    <table style="width:100%;border-collapse:collapse;font:500 12.5px 'Noto Sans JP',sans-serif;margin-bottom:14px">
+      <thead><tr style="background:#1d3b63;color:#fff;font-weight:700"><td style="padding:8px 10px;width:34px">#</td><td style="padding:8px 10px">画面</td><td style="padding:8px 10px">主利用者</td><td style="padding:8px 10px">役割</td></tr></thead>
+      <tbody>
+        <sc-for list="{{ screens }}" as="s" hint-placeholder-count="9"><tr style="border-bottom:1px solid #e3e6ec"><td style="padding:7px 10px;color:#1d3b63;font-weight:700">{{ s.n }}</td><td style="padding:7px 10px;font-weight:700">{{ s.name }}</td><td style="padding:7px 10px;color:#6b7480">{{ s.who }}</td><td style="padding:7px 10px;color:#3a4253">{{ s.role }}</td></tr></sc-for>
+      </tbody>
+    </table>
+    <div style="background:#f3f5f9;border-radius:10px;padding:14px 16px;font:600 12.5px/1.9 'Noto Sans JP',sans-serif;color:#1d3b63">遷移：トップ →（＋新規）→ 工番種別選択(LW/TS) → 案件登録 → トップに戻る ／ トップで案件を選択 → 作業報告書入力 →（サイン取得）→ PDFプレビュー →（責任者 確認印）→ 印刷・PDF保存 → クローズ → 履歴管理。</div>
+
+    <!-- 2. データモデル -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">2. データモデル（スプレッドシート設計案）</div>
+    <div style="font:500 13px/1.9 'Noto Sans JP',sans-serif;color:#3a4253;margin-bottom:14px">1案件＝1レコード。ネストする配列（スタッフ・作業/移動時間・確認事項・作業種別）は、<b>親シート「案件」のJSON列</b>として持つ方式を推奨（実装が軽い）。正規化したい場合は子シートに分割可。シートは「案件(Cases)」「設定(Settings)」の2枚＋画像保存用Driveフォルダ。</div>
+
+    <div style="font:800 14px 'Noto Sans JP',sans-serif;color:#1d3b63;margin:18px 0 8px">シート「案件 (Cases)」— 基本項目（1セル=1列）</div>
+    <table style="width:100%;border-collapse:collapse;font:500 11.5px 'Noto Sans JP',sans-serif;margin-bottom:8px">
+      <thead><tr style="background:#eef2f8;color:#13284a;font-weight:700"><td style="padding:6px 8px">列名</td><td style="padding:6px 8px">内容</td><td style="padding:6px 8px;width:150px">例 / 取りうる値</td></tr></thead>
+      <tbody>
+        <sc-for list="{{ fields }}" as="f" hint-placeholder-count="20"><tr style="border-bottom:1px solid #e3e6ec"><td style="padding:5px 8px;font-weight:700;color:#1d3b63;white-space:nowrap">{{ f.k }}</td><td style="padding:5px 8px;color:#3a4253">{{ f.d }}</td><td style="padding:5px 8px;color:#6b7480">{{ f.e }}</td></tr></sc-for>
+      </tbody>
+    </table>
+
+    <div style="font:800 14px 'Noto Sans JP',sans-serif;color:#1d3b63;margin:18px 0 8px">ネスト項目（JSON文字列で保持）</div>
+    <table style="width:100%;border-collapse:collapse;font:500 11.5px 'Noto Sans JP',sans-serif;margin-bottom:8px">
+      <thead><tr style="background:#eef2f8;color:#13284a;font-weight:700"><td style="padding:6px 8px">列名</td><td style="padding:6px 8px">構造</td></tr></thead>
+      <tbody>
+        <sc-for list="{{ nested }}" as="n" hint-placeholder-count="5"><tr style="border-bottom:1px solid #e3e6ec"><td style="padding:5px 8px;font-weight:700;color:#1d3b63;white-space:nowrap;vertical-align:top">{{ n.k }}</td><td style="padding:5px 8px;color:#3a4253;font-family:monospace;font-size:11px">{{ n.d }}</td></tr></sc-for>
+      </tbody>
+    </table>
+    <div style="background:#f3f5f9;border-radius:10px;padding:12px 14px;font:500 11.5px/1.8 'Noto Sans JP',sans-serif;color:#3a4253;margin-top:8px">補足：時間の合計・1日ごとの合計・作業時間/移動時間の集計は<b>保存せず、表示時に算出</b>（プロトと同じ）。移動の<b>dir</b>＝往路/現地/復路。スタッフが<b>separate:true</b>のときのみ個別のwork/travelを持ち、falseは commonWork/commonTravel を共有（＝連名表示）。</div>
+
+    <!-- 3. 業務ルール -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">3. 業務ルール（必ず実装）</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <sc-for list="{{ rules }}" as="r" hint-placeholder-count="8"><div style="display:flex;gap:12px;background:#f8f9fb;border:1px solid #e3e6ec;border-radius:10px;padding:12px 14px"><div style="font:800 13px 'Noto Sans JP',sans-serif;color:#fff;background:#1d3b63;border-radius:7px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:none">{{ r.n }}</div><div style="font:500 12.5px/1.8 'Noto Sans JP',sans-serif;color:#3a4253">{{ r.t }}</div></div></sc-for>
+    </div>
+
+    <!-- 4. モック↔本実装 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">4. モック箇所 ↔ 本実装の対応</div>
+    <div style="font:500 13px/1.9 'Noto Sans JP',sans-serif;color:#3a4253;margin-bottom:14px">プロトでは下記が<b>疑似実装（デモ）</b>です。GASで本物に置き換えてください。</div>
+    <table style="width:100%;border-collapse:collapse;font:500 12px 'Noto Sans JP',sans-serif">
+      <thead><tr style="background:#1d3b63;color:#fff;font-weight:700"><td style="padding:8px 10px;width:150px">機能</td><td style="padding:8px 10px">プロトの状態（モック）</td><td style="padding:8px 10px">GAS本実装</td></tr></thead>
+      <tbody>
+        <sc-for list="{{ mocks }}" as="m" hint-placeholder-count="6"><tr style="border-bottom:1px solid #e3e6ec"><td style="padding:7px 10px;font-weight:700;color:#1d3b63;vertical-align:top">{{ m.f }}</td><td style="padding:7px 10px;color:#6b7480;vertical-align:top">{{ m.mock }}</td><td style="padding:7px 10px;color:#1b5e3a;vertical-align:top">{{ m.real }}</td></tr></sc-for>
+      </tbody>
+    </table>
+
+    <!-- 5. GAS構成 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">5. 推奨アーキテクチャ（GAS）</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ arch }}" as="a" hint-placeholder-count="6"><div style="border:1px solid #e3e6ec;border-radius:10px;padding:13px 15px"><div style="font:800 13.5px 'Noto Sans JP',sans-serif;color:#1d3b63;margin-bottom:4px">{{ a.t }}</div><div style="font:500 12.5px/1.8 'Noto Sans JP',sans-serif;color:#3a4253">{{ a.d }}</div></div></sc-for>
+    </div>
+
+    <!-- 6. PDF仕様 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">6. PDF出力フォーマット仕様</div>
+    <div style="font:500 13px/1.9 'Noto Sans JP',sans-serif;color:#3a4253;margin-bottom:12px">プロトの「PDFプレビュー」のレイアウトを正とする（Excel原本「現地作業書LW」準拠）。A4縦。罫線・項目配置はプロト画面を参照。</div>
+    <table style="width:100%;border-collapse:collapse;font:500 12px 'Noto Sans JP',sans-serif">
+      <thead><tr style="background:#eef2f8;color:#13284a;font-weight:700"><td style="padding:6px 8px;width:120px">領域</td><td style="padding:6px 8px">内容</td></tr></thead>
+      <tbody>
+        <sc-for list="{{ pdfrows }}" as="p" hint-placeholder-count="8"><tr style="border-bottom:1px solid #e3e6ec"><td style="padding:6px 8px;font-weight:700;color:#1d3b63;vertical-align:top">{{ p.k }}</td><td style="padding:6px 8px;color:#3a4253">{{ p.d }}</td></tr></sc-for>
+      </tbody>
+    </table>
+    <div style="background:#f3f5f9;border-radius:10px;padding:12px 14px;font:500 11.5px/1.8 'Noto Sans JP',sans-serif;color:#3a4253;margin-top:10px">ファイル名規則：<b>作業報告書_お客様名_装置名(機種)_工番_日付.pdf</b>（プロト実装済み）。長文の「原因・処理」でも、確認事項のミニ表は本文の下に流れ重ならない（実装済み・要踏襲）。</div>
+
+    <!-- 7. サーバー関数 API 契約 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">7. サーバー関数 API（google.script.run 契約）</div>
+    <div style="font:500 13px/1.9 'Noto Sans JP',sans-serif;color:#3a4253;margin-bottom:14px">フロントから呼び出すサーバー関数の一覧。命名は目安。すべて try/catch し、失敗時はエラーを返してフロントで通知する。</div>
+    <table style="width:100%;border-collapse:collapse;font:500 11.5px 'Noto Sans JP',sans-serif">
+      <thead><tr style="background:#1d3b63;color:#fff;font-weight:700"><td style="padding:7px 9px;width:180px">関数</td><td style="padding:7px 9px">入出力</td><td style="padding:7px 9px;width:210px">備考</td></tr></thead>
+      <tbody>
+        <sc-for list="{{ api }}" as="a" hint-placeholder-count="14"><tr style="border-bottom:1px solid #e3e6ec"><td style="padding:6px 9px;font-family:monospace;font-size:11px;font-weight:700;color:#1d3b63;vertical-align:top">{{ a.fn }}</td><td style="padding:6px 9px;color:#3a4253;vertical-align:top">{{ a.io }}</td><td style="padding:6px 9px;color:#6b7480;vertical-align:top">{{ a.note }}</td></tr></sc-for>
+      </tbody>
+    </table>
+    <div style="font:800 13px 'Noto Sans JP',sans-serif;color:#1d3b63;margin:18px 0 6px">案件シートの列順（そのままヘッダーに使える）</div>
+    <div style="background:#0f1b2e;color:#cfe0f5;border-radius:10px;padding:12px 14px;font-family:monospace;font-size:10.5px;line-height:1.7;word-break:break-all">{{ sheetCols }}</div>
+
+    <!-- 8. ステータス遷移 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">8. ステータス遷移</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <sc-for list="{{ statusFlow }}" as="s" hint-placeholder-count="4"><div style="background:#eef2f8;border:1.5px solid #1d3b63;border-radius:20px;padding:6px 15px;font:700 12.5px 'Noto Sans JP',sans-serif;color:#1d3b63">{{ s.s }}</div><span style="color:#9aa1ac;font-weight:700">→</span></sc-for>
+      <div style="font:600 12px 'Noto Sans JP',sans-serif;color:#6b7480">（履歴へ）</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{ statusFlow }}" as="s" hint-placeholder-count="4"><div style="display:flex;gap:10px"><div style="font:800 12.5px 'Noto Sans JP',sans-serif;color:#fff;background:#1d3b63;border-radius:6px;padding:3px 11px;flex:none;min-width:56px;text-align:center">{{ s.s }}</div><div style="font:500 12.5px/1.7 'Noto Sans JP',sans-serif;color:#3a4253">{{ s.w }}</div></div></sc-for>
+    </div>
+
+    <!-- 9. Gemini 連携 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:34px 0 16px">9. Gemini 連携の実装指針</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ gemini }}" as="g" hint-placeholder-count="3"><div style="border:1px solid #e3e6ec;border-radius:10px;padding:13px 15px"><div style="font:800 13.5px 'Noto Sans JP',sans-serif;color:#1d3b63;margin-bottom:4px">{{ g.t }}</div><div style="font:500 12.5px/1.85 'Noto Sans JP',sans-serif;color:#3a4253">{{ g.d }}</div></div></sc-for>
+    </div>
+
+    <!-- 10. つまずきやすい注意点 -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #c0392b;padding-left:12px;margin:34px 0 16px">10. つまずきやすい注意点（バグ防止チェック）</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{ pitfalls }}" as="p" hint-placeholder-count="8"><div style="display:flex;gap:10px;background:#fdf2f0;border:1px solid #f2cfc8;border-radius:9px;padding:10px 13px"><div style="color:#c0392b;font-weight:800;flex:none">✓</div><div style="font:500 12px/1.75 'Noto Sans JP',sans-serif;color:#5a3a34">{{ p }}</div></div></sc-for>
+    </div>
+
+    <!-- 11. 実装ステップ -->
+    <div class="pb" style="font:900 19px 'Noto Sans JP',sans-serif;color:#13284a;border-left:5px solid #1d3b63;padding-left:12px;margin:30px 0 16px">11. 推奨実装ステップ</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="7"><div style="display:flex;gap:12px;align-items:flex-start"><div style="font:800 12px 'Noto Sans JP',sans-serif;color:#1d3b63;min-width:22px">{{ s.n }}.</div><div style="font:500 12.5px/1.8 'Noto Sans JP',sans-serif;color:#3a4253">{{ s.t }}</div></div></sc-for>
+    </div>
+
+    <div style="border-top:2px solid #e3e6ec;padding-top:16px;font:500 11.5px/1.8 'Noto Sans JP',sans-serif;color:#6b7480">
+      添付：参照プロトタイプ「作業報告書アプリ.dc.html」（全画面・全フロー動作）。本書とあわせて実装エージェントへ共有してください。Gemini APIキー・送信先メール・自社情報（LINE W／テクノサービスの正式名称・住所）の確定値は別途支給。
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    return {
+      screens:[
+        {n:'1',name:'トップ（案件ストック）',who:'共通',role:'登録済み案件の一覧。PCは左LW/右TSの2列、タブレット/モバイルは1列＋フィルタ。⋯メニューで編集/複製/削除。右上に「履歴」'},
+        {n:'2',name:'工番種別選択',who:'管理者',role:'新規登録の入口。LW工番／TS工番を必ず選択し、以降のフォーマットを切替'},
+        {n:'3',name:'新規案件登録 / 編集',who:'管理者',role:'スタッフ名・予定/指示メモ・工番情報・お客様情報・機械銘板・作業内容(事前)を登録'},
+        {n:'4',name:'作業報告書入力',who:'現場作業者',role:'作業種別/区分/原因・処理/確認事項/スタッフ別 作業・移動時間/承認・サイン/確認印。音声入力・銘板撮影あり'},
+        {n:'5',name:'サイン取得',who:'お客様',role:'タッチ手書きキャンバス。御社名・御担当者名を表示'},
+        {n:'6',name:'PDFプレビュー',who:'共通',role:'Excel原本準拠の罫線レイアウト。ここで責任者の確認印→印刷・PDF保存→クローズ'},
+        {n:'7',name:'メール送信',who:'管理者',role:'設定の宛先へ定型文＋PDFを送信（{工番}{お客様名}{作業日}差込）'},
+        {n:'8',name:'設定',who:'管理者',role:'送信先メール・件名・本文の定型文を編集'},
+        {n:'9',name:'履歴管理',who:'管理者',role:'クローズ済み案件を保管・再表示・再印刷。フリーワード検索（工番/製番/お客様名/装置名/日付）＋LW/TS種別チップで絞り込み'}
+      ],
+      fields:[
+        {k:'id',d:'案件の一意キー',e:'c1, c2 …（UUID推奨）'},
+        {k:'type',d:'工番種別',e:'LW / TS'},
+        {k:'status',d:'進捗',e:'未着手 / 作業中 / 完了 / クローズ'},
+        {k:'koban',d:'工番№',e:'LW25083 / TS26052'},
+        {k:'motoKoban',d:'元工番',e:'LW25010'},
+        {k:'nohinNo',d:'納品番号（LWのみ）',e:'D-1205'},
+        {k:'kobanName',d:'工番名（作業概要）',e:'3m切断走行 据付'},
+        {k:'nohinSaki',d:'お客様名/納品先（会社名）',e:'三星重工業'},
+        {k:'okyakuSub',d:'お客様名2行目（製造所・担当者）',e:'名古屋工場 高木'},
+        {k:'basho',d:'実際の作業場所/住所',e:'愛知県名古屋市港区'},
+        {k:'tantou',d:'ご担当者',e:'高木 信治'},
+        {k:'tel',d:'電話番号',e:'052-000-0000'},
+        {k:'kishu',d:'機種',e:'LN-3000'},
+        {k:'katashiki',d:'型式（銘板）',e:'CT-3000'},
+        {k:'seiban',d:'製番（銘板）',e:'25-0083'},
+        {k:'nenGappi',d:'製造年月（銘板）',e:'2025-03'},
+        {k:'yoteibi',d:'作業予定日',e:'2026-06-02'},
+        {k:'shijiNaiyou',d:'指示書メモ（事前）',e:'据付・メンテ説明…'},
+        {k:'paid',d:'区分',e:'有償 / 無償 / 調整中'},
+        {k:'genin',d:'作業内容（原因）',e:'長文可'},
+        {k:'shori',d:'作業内容（処理）',e:'長文可・音声入力対象'},
+        {k:'oshaName',d:'御社名（承認）',e:'三星重工業'},
+        {k:'tantoushaName',d:'御担当者名（承認）',e:'高木 信治'},
+        {k:'signature',d:'お客様サイン画像',e:'PNG（DriveのfileId/URL）'},
+        {k:'kaninStamped',d:'責任者 確認印 押印済',e:'true / false'},
+        {k:'kaninName',d:'確認印 責任者名',e:'製造部 田中 / TSC 木下'},
+        {k:'archived',d:'クローズ（履歴行き）',e:'true / false'},
+        {k:'closedAt',d:'クローズ日',e:'2026-06-20'},
+        {k:'createdAt / updatedAt',d:'作成・更新日時',e:'タイムスタンプ'}
+      ],
+      nested:[
+        {k:'workTypes',d:'{"据付":true,"点検":true}（据付/移設/納品/点検/改造/修理/調査）'},
+        {k:'confirmItems',d:'[{key,label,value}]　LW=ブレーキ調整SW OFF/R/B+POS原点復帰/強制運転復帰、value="" | "✓" | "−"'},
+        {k:'staff',d:'[{id,name,separate,(separate時)work:[],travel:[]}]'},
+        {k:'commonWork',d:'[{date,start,end}]　… separate=falseのスタッフ共通（連名）'},
+        {k:'commonTravel',d:'[{dir:"往路|現地|復路",date,start,end,km}]'}
+      ],
+      rules:[
+        {n:'1',t:'新規登録は必ずLW/TSの工番種別を先に選択し、種別に応じたフォーマットで登録する（LWは納品番号あり）。'},
+        {n:'2',t:'責任者の確認印（電子印）が押されるまで「印刷・PDF保存」「クローズ」は不可。押印者は LW工番＝製造部 管理者（田中）／TS工番＝TSC 管理者（木下）。確認印はPDFプレビューでも押せる。'},
+        {n:'3',t:'クローズ（完了）すると案件はトップ一覧から外れ、履歴管理に保管する（データは削除しない）。履歴からは再表示・再印刷のみ可。'},
+        {n:'4',t:'スタッフは人数分登録。separate=falseは全員同一行動として commonWork/commonTravel を共有し、PDFでは連名表示。separate=trueのスタッフのみ個別の作業/移動時間を持つ（例外設定）。'},
+        {n:'5',t:'移動時間は往路/現地/復路＋日付を持ち、往路まる1日→現地数日→復路まる1日のような複数日案件に対応。'},
+        {n:'6',t:'作業時間・移動時間の合計、および1日ごとの合計は保存せず表示時に算出。1日合計はPDFの各行脇に小さく表示する。'},
+        {n:'7',t:'区分は有償/無償/調整中の3択（「製造」は区分ではなく確認印側）。お客様名は会社名＋（製造所・担当者）を1行で、末尾に「様」を1つ。'},
+        {n:'8',t:'メール本文・件名は設定の定型文を使い、{工番}{お客様名}{作業日}を送信時に差込む。送信先は設定画面で指定。'},
+        {n:'9',t:'履歴検索は、工番・元工番・製番・お客様名・製造所/担当者・装置名(機種)・型式・工番名・日付(クローズ日/作業予定日)を横断対象とし、空白区切りの複数語はAND。LW/TS種別チップと併用。大文字小文字は無視。'}
+      ],
+      mocks:[
+        {f:'処置の音声整形',mock:'ブラウザ音声認識→簡易整形（疑似要約）。マイク不可時は手入力フォールバック',real:'認識テキストをGemini（gemini-2.x flash）へ送り、報告書向けに整形。UrlFetchAppで呼び出し、結果を処置欄へ'},
+        {f:'銘板の画像解析',mock:'撮影画像→固定の疑似抽出（機種/型式/製番/製造年月）',real:'撮影画像をGemini Vision（OCR）へ送り、JSONで4項目抽出→各項目へ反映。実物銘板サンプルでプロンプト調整'},
+        {f:'メール送信',mock:'送信完了画面をシミュレート',real:'GmailApp.sendEmail で本文＋PDF添付を実送信'},
+        {f:'PDF生成',mock:'ブラウザの印刷（別ウィンドウ複製）',real:'HTML→PDF（HtmlService出力をBlob化）またはGoogleドキュメント生成→PDF化'},
+        {f:'データ保存',mock:'メモリ上のstateのみ（リロードで消える）',real:'スプレッドシートに永続化（案件・設定）。画像はDrive'},
+        {f:'音声認識',mock:'Web Speech API（Chrome系のみ）',real:'同左を継続。非対応端末は手入力。必要なら録音音声をGeminiへ送る方式も可'}
+      ],
+      arch:[
+        {t:'フロントエンド：HtmlService',d:'プロトの画面をHtmlService用のHTML/CSS/JS（プレーン）へ移植。doGet()でindexを返す。状態管理は素のJSでよい。レスポンシブ（PC/タブレット/モバイル）はプロト同様にブレークポイントで切替。'},
+        {t:'サーバ連携：google.script.run',d:'保存・取得・PDF生成・メール送信・Gemini呼び出しはサーバ関数として実装し、google.script.runで非同期呼び出し。'},
+        {t:'データ：スプレッドシート',d:'「案件」「設定」シート。1案件1行＋ネストはJSON列。CRUDはSpreadsheetApp。同時編集が増えるならLockServiceで排他。'},
+        {t:'画像：Google Drive',d:'サインPNG・（必要なら）銘板写真をDriveに保存しfileIdを案件に紐付け。'},
+        {t:'AI：Gemini API（UrlFetchApp）',d:'APIキーはScript Propertiesに格納。音声整形＝テキスト生成、銘板＝Vision（OCR）。レスポンスはJSONで受けてマッピング。'},
+        {t:'PDF・メール：Apps Script標準',d:'PDF生成後Blob化→GmailApp.sendEmailで設定の宛先へ添付送信。件名/本文は定型文＋差込。'}
+      ],
+      pdfrows:[
+        {k:'タイトル',d:'「据付・移設・納品・点検・改造・修理・調査作業書」。該当する作業種別を丸囲みで強調'},
+        {k:'ヘッダー上段',d:'工番№／お客様名(会社+製造所/担当 様)／機種／作業日'},
+        {k:'ヘッダー下段',d:'元工番／作業者名／区分(有償・無償・調整中)／確認印(製造 or TSC＋責任者名の丸印、左上に「製造」/「TSC」小ラベル)'},
+        {k:'作業内容',d:'縦書きラベル＋（原因）（処理）本文。右下に「作業終了時の確認事項」ミニ表（✓/−）。長文時は本文の下に流れ重ならない'},
+        {k:'作業時間',d:'日付＋開始〜終了の複数行。各行脇に1日合計を小さく。末尾に作業時間 合計'},
+        {k:'移動時間',d:'往路/現地/復路＋日付＋開始〜終了＋Km。末尾に移動時間 合計'},
+        {k:'承認',d:'「上記作業が終了したことを承認します。」宛先（株式会社ラインワークス 殿 等）／御社名／御担当者名（サイン画像）'},
+        {k:'お客様/銘板/フッター',d:'お客様情報・銘板情報（型式/製番/年月日）・自社ロゴ＋住所/Tel/Fax'}
+      ],
+      steps:[
+        {n:'1',t:'スプレッドシート（案件・設定）とDriveフォルダを用意し、データモデルを確定。'},
+        {n:'2',t:'HtmlServiceで全9画面を移植（プロトのレイアウト・文言・配色を踏襲）。レスポンシブ対応。'},
+        {n:'3',t:'CRUD（案件登録/編集/複製/削除/クローズ→履歴）＋履歴検索をgoogle.script.run＋Sheetsで実装。'},
+        {n:'4',t:'確認印ゲート・サイン保存・ステータス遷移など業務ルールを実装。'},
+        {n:'5',t:'PDF生成（プロトのレイアウト準拠）→GmailAppで送信。設定の定型文＋差込。'},
+        {n:'6',t:'Gemini連携（音声整形・銘板OCR）をUrlFetchAppで本実装。APIキーはScript Properties。実物銘板でプロンプト調整。'},
+        {n:'7',t:'実機（タブレット/PC）でE2E確認：登録→現場入力→サイン→確認印→PDF→送信→クローズ→履歴。'}
+      ],
+      sheetCols:'id | type | status | koban | motoKoban | nohinNo | kobanName | nohinSaki | okyakuSub | basho | tantou | tel | kishu | katashiki | seiban | nenGappi | yoteibi | shijiNaiyou | paid | genin | shori | oshaName | tantoushaName | signatureFileId | kaninStamped | kaninName | workTypesJson | confirmItemsJson | staffJson | commonWorkJson | commonTravelJson | archived | closedAt | createdAt | updatedAt',
+      statusFlow:[
+        {s:'未着手',w:'管理者が案件を登録した直後。作業報告書は未入力。'},
+        {s:'作業中',w:'現場で作業報告書の入力を開始／一時保存した状態。'},
+        {s:'完了',w:'確認印が押され、印刷・保存の準備が整った状態（クローズ前）。'},
+        {s:'クローズ',w:'管理者がクローズ実行。archived=true、closedAt を記録し、一覧から外れ履歴へ。'}
+      ],
+      api:[
+        {fn:'getCases()',io:'→ 未クローズ案件の配列（トップ用）', note:'archived≠true のみ。type/statusを含む'},
+        {fn:'getHistory(query, type)',io:'query:文字列, type:"all"|"LW"|"TS" → 絞り込み済みのクローズ案件配列', note:'検索は横断・AND・大文字小文字無視。サーバ側/クライアント側どちらでも可'},
+        {fn:'getCase(id)',io:'id → 案件1件（ネスト展開済み）', note:'編集・報告書・プレビュー表示に使用'},
+        {fn:'saveCase(caseObj)',io:'案件オブジェクト → 保存後のid', note:'新規/更新の両対応（idの有無で判定）。updatedAt更新'},
+        {fn:'duplicateCase(id)',io:'id → 複製後の新id', note:'工番等はコピーし status=未着手, サイン/確認印はクリア'},
+        {fn:'deleteCase(id)',io:'id → 成否', note:'物理削除（トップの⋯メニュー）。クローズとは別'},
+        {fn:'closeCase(id)',io:'id → 成否', note:'archived=true, closedAt記録。確認印済みが前提'},
+        {fn:'saveSignature(id, dataUrl)',io:'id, PNG dataURL → fileId', note:'Driveへ保存しsignatureFileIdを更新'},
+        {fn:'stampKanin(id, name)',io:'id, 責任者名 → 成否', note:'kaninStamped=true, kaninName記録'},
+        {fn:'sendReportMail(id)',io:'id → 成否', note:'PDF生成→設定の宛先へGmailApp送信。件名/本文は差込'},
+        {fn:'generatePdf(id)',io:'id → PDF Blob / DriveのURL', note:'プロトのレイアウト準拠。印刷/保存/メール添付で共用'},
+        {fn:'getSettings() / saveSettings(obj)',io:'設定(email/subject/body)の取得・保存', note:'設定シート1行'},
+        {fn:'aiFormatShori(text)',io:'認識テキスト → 整形済み処置文', note:'Gemini（テキスト生成）'},
+        {fn:'aiReadPlate(imageBase64)',io:'画像 → {kishu,katashiki,seiban,nenGappi}', note:'Gemini Vision（OCR）'}
+      ],
+      gemini:[
+        {t:'処置の整形（テキスト生成）',d:'model: gemini-2.x-flash。UrlFetchApp で generateContent を呼ぶ。プロンプト例：「あなたは製造設備の保守報告の校正者です。次の口述メモを、作業報告書の『処置』欄向けに、事実のみ・敬体・簡潔な文章へ整えてください。推測や誇張はしない。○○」。入力＝音声認識テキスト、出力＝整形済み本文（プレーンテキスト）。'},
+        {t:'銘板OCR（画像→構造化）',d:'model: gemini-2.x-flash（Vision）。画像をinlineData(base64)で渡し、responseMimeType:"application/json" と responseSchema で {kishu,katashiki,seiban,nenGappi} を強制。プロンプト例：「アルミ銘板の写真から、機種・型式・製番・製造年月を読み取りJSONで返す。読めない項目は空文字」。実物銘板サンプル入手後にラベル対応（例：TYPE→型式, No.→製番）を微調整。'},
+        {t:'共通',d:'APIキーは PropertiesService.getScriptProperties()。呼び出しは try/catch し、失敗時はプロト同様フォールバック（処置＝手入力、銘板＝手入力）。タイムアウト・レート制限に注意。'}
+      ],
+      pitfalls:[
+        'DC(プロト)の {{ }} 記法・class Component は SkyClaude 専用。GASへは通常のHTML/JS/CSSへ書き直す（そのままコピーしない）。',
+        'お客様名は「会社名＋（製造所・担当者）」を1行で、末尾の「様」は1つだけ（重複禁止）。okyakuSub には「様」を含めない。',
+        '区分は有償/無償/調整中の3択のみ。「製造」は区分ではなく確認印（製造部/TSC責任者）側。混同しない。',
+        '確認印が未押印の間は「印刷・PDF保存」「クローズ」を出さない（PDFプレビューのフッターで押印可）。クローズ済みを履歴から開いた時は「印刷・PDF保存」のみ表示。',
+        '合計時間・1日合計は保存せず表示時に算出。移動は往路/現地/復路＋日付を持つ（複数日案件対応）。',
+        'スタッフ separate=false は commonWork/commonTravel を共有し連名表示。true のスタッフのみ個別 work/travel を持つ。',
+        'PDFは長文の原因・処理でも確認事項ミニ表が本文の下に流れる（重ねない）。ファイル名＝作業報告書_お客様名_装置名_工番_日付.pdf。',
+        'LWのみ納品番号(nohinNo)。TSは非表示。新規登録は必ず種別選択が先。'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
