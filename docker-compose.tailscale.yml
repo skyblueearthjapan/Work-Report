@@ -1,3 +1,7 @@
+# アプリ本体(compose プロジェクト "lineworks")とは別プロジェクトにして、
+# アプリ更新時の --remove-orphans 等で公開ノードを巻き込まないようにする。
+name: lineworks-ts
+
 services:
   tailscale-lineworks:
     image: tailscale/tailscale:latest
