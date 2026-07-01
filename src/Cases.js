@@ -34,7 +34,9 @@ function rowToCase_(row) {
     archived: toBool_(o.archived),
     closedAt: str_(o.closedAt),
     createdAt: str_(o.createdAt),
-    updatedAt: str_(o.updatedAt)
+    updatedAt: str_(o.updatedAt),
+    pdfFileId: str_(o.pdfFileId),
+    driveFolderId: str_(o.driveFolderId)
   };
   return c;
 }
@@ -64,7 +66,9 @@ function caseToRow_(c) {
     archived: toBool_(c.archived),
     closedAt: str_(c.closedAt),
     createdAt: str_(c.createdAt),
-    updatedAt: str_(c.updatedAt)
+    updatedAt: str_(c.updatedAt),
+    pdfFileId: str_(c.pdfFileId),
+    driveFolderId: str_(c.driveFolderId)
   };
   return CASE_COLUMNS.map(function (col) { return map[col]; });
 }
@@ -253,6 +257,34 @@ function closeCase(id) {
   c.updatedAt = nowStamp_();
   found.sheet.getRange(found.rowIndex, 1, 1, CASE_COLUMNS.length).setValues([caseToRow_(c)]);
   return true;
+}
+
+/** 確認印を押す（kaninStamped=true, kaninName 記録）。API契約 stampKanin。 */
+function stampKanin(id, name) {
+  return updateCaseFields_(id, function (c) {
+    c.kanin = { stamped: true, name: name || (c.kanin && c.kanin.name) || (c.type === 'LW' ? '製造部 田中' : 'TSC 木下') };
+  });
+}
+
+/**
+ * 案件1件を読み込み→mutator で書き換え→行を更新（排他）。
+ * Drive/PDF/確認印など単一フィールド更新の共通経路。
+ * @return 更新後のケースオブジェクト
+ */
+function updateCaseFields_(id, mutator) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var found = findCaseRow_(id);
+    if (!found) throw new Error('案件が見つかりません: ' + id);
+    var c = found.data;
+    mutator(c);
+    c.updatedAt = nowStamp_();
+    found.sheet.getRange(found.rowIndex, 1, 1, CASE_COLUMNS.length).setValues([caseToRow_(c)]);
+    return c;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ---------- 並び替え / 補助 ---------- */

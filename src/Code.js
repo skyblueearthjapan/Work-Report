@@ -31,6 +31,7 @@ function getBootData_() {
     historyCount: state.historyCount,
     settings: getSettings(),
     company: getCompany(),
+    folderUrl: getAppFolderUrl(),
     today: todayStr_()
   };
 }

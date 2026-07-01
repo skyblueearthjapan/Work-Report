@@ -5,10 +5,14 @@
 
 var SHEET_CASES = '案件';
 var SHEET_SETTINGS = '設定';
-var IMAGE_FOLDER_NAME = '作業報告書_画像';
-var PROP_IMAGE_FOLDER_ID = 'IMAGE_FOLDER_ID';
+// 保管フォルダ（1アプリ1つ。総務部等と共有する親フォルダ）
+var APP_FOLDER_NAME = '作業報告書アプリ_保管フォルダ';
+var PROP_APP_FOLDER_ID = 'APP_FOLDER_ID';
 
-/** 案件シートの列順（仕様書 sheetCols を踏襲。1案件=1行）。 */
+/**
+ * 案件シートの列順（仕様書 sheetCols を踏襲＋Drive管理列を追記。1案件=1行）。
+ * 末尾2列 pdfFileId/driveFolderId は本アプリで追加（案件フォルダとPDFバックアップの紐付け）。
+ */
 var CASE_COLUMNS = [
   'id', 'type', 'status', 'koban', 'motoKoban', 'nohinNo', 'kobanName',
   'nohinSaki', 'okyakuSub', 'basho', 'tantou', 'tel',
@@ -17,7 +21,8 @@ var CASE_COLUMNS = [
   'oshaName', 'tantoushaName', 'signatureFileId',
   'kaninStamped', 'kaninName',
   'workTypesJson', 'confirmItemsJson', 'staffJson', 'commonWorkJson', 'commonTravelJson',
-  'archived', 'closedAt', 'createdAt', 'updatedAt'
+  'archived', 'closedAt', 'createdAt', 'updatedAt',
+  'pdfFileId', 'driveFolderId'
 ];
 
 /** 設定シートの既定値（仕様書「別途支給」の暫定値）。 */
@@ -47,19 +52,22 @@ function ensureSetup_() {
   var ss = getBook_();
   ensureCasesSheet_(ss);
   ensureSettingsSheet_(ss);
-  ensureImageFolder_();
+  ensureAppFolder_();
 }
 
-/** 案件シートを保証し、ヘッダーを整える。 */
+/** 案件シートを保証し、ヘッダーを CASE_COLUMNS に整える（列追加のマイグレーション込み）。 */
 function ensureCasesSheet_(ss) {
   var sh = ss.getSheetByName(SHEET_CASES);
   if (!sh) sh = ss.insertSheet(SHEET_CASES);
-  var firstRow = sh.getRange(1, 1, 1, CASE_COLUMNS.length).getValues()[0];
-  var needsHeader = firstRow.join('') === '' || firstRow[0] !== 'id';
-  if (needsHeader) {
-    sh.getRange(1, 1, 1, CASE_COLUMNS.length).setValues([CASE_COLUMNS]);
+  // 必要列数を確保（既存シートに新列を安全に追加）
+  var need = CASE_COLUMNS.length;
+  if (sh.getMaxColumns() < need) sh.insertColumnsAfter(sh.getMaxColumns(), need - sh.getMaxColumns());
+  var header = sh.getRange(1, 1, 1, need).getValues()[0];
+  var same = header.length === need && header.every(function (v, i) { return v === CASE_COLUMNS[i]; });
+  if (!same) {
+    sh.getRange(1, 1, 1, need).setValues([CASE_COLUMNS]);
     sh.setFrozenRows(1);
-    sh.getRange(1, 1, 1, CASE_COLUMNS.length).setFontWeight('bold');
+    sh.getRange(1, 1, 1, need).setFontWeight('bold');
   }
   return sh;
 }
@@ -85,25 +93,41 @@ function ensureSettingsSheet_(ss) {
   return sh;
 }
 
-/** 画像保存用 Drive フォルダを保証し、ID を Script Properties に保持。 */
-function ensureImageFolder_() {
+/**
+ * 保管の親フォルダ（1アプリ1つ）を保証し、ID を Script Properties に保持。
+ * この1フォルダを総務部等と共有すれば、全案件のPDF・サインを閲覧できる。
+ */
+function ensureAppFolder_() {
   var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty(PROP_IMAGE_FOLDER_ID);
+  var id = props.getProperty(PROP_APP_FOLDER_ID);
   if (id) {
     try {
-      return DriveApp.getFolderById(id);
+      var f = DriveApp.getFolderById(id);
+      if (!f.isTrashed()) return f;
     } catch (err) {
       // フォルダが消えている等 → 作り直す
     }
   }
-  var folder = DriveApp.createFolder(IMAGE_FOLDER_NAME);
-  props.setProperty(PROP_IMAGE_FOLDER_ID, folder.getId());
+  var folder = DriveApp.createFolder(APP_FOLDER_NAME);
+  props.setProperty(PROP_APP_FOLDER_ID, folder.getId());
   return folder;
 }
 
 function getCasesSheet_() { return ensureCasesSheet_(getBook_()); }
 function getSettingsSheet_() { return ensureSettingsSheet_(getBook_()); }
-function getImageFolder_() { return ensureImageFolder_(); }
+function getAppFolder_() { return ensureAppFolder_(); }
+
+/** Drive/ファイル名に使えない文字を除去。 */
+function sanitizeName_(x) {
+  return String(x || '').replace(/[\\/:*?"<>|\r\n\t]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** 案件フォルダ名： 工番_お客様名_作業日（人が見て判別しやすい）。 */
+function caseFolderName_(c) {
+  var d = c.yoteibi || c.closedAt || todayStr_();
+  return [sanitizeName_(c.koban) || 'no-koban', sanitizeName_(c.nohinSaki), sanitizeName_(d)]
+    .filter(Boolean).join('_');
+}
 
 /** 設定シート(縦持ち)を {key:value} に読み出す（内部）。 */
 function readSettingsMap_(sh) {

@@ -682,7 +682,8 @@
       '<div><label style="' + labStyle + '">送信先メールアドレス</label><input class="req"' + chg('settings', { name: 'email' }) + ' value="' + esc(st.email) + '" inputmode="email" style="' + inpStyle + '"></div>' +
       '<div><label style="' + labStyle + '">件名（定型）</label><input class="req"' + chg('settings', { name: 'subject' }) + ' value="' + esc(st.subject) + '" style="' + inpStyle + '"></div>' +
       '<div><label style="' + labStyle + '">本文（定型文）</label><textarea' + chg('settings', { name: 'body' }) + ' style="width:100%;height:180px;border:1.5px solid var(--border);border-radius:13px;padding:14px 16px;font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(st.body) + '</textarea></div>' +
-      '<div style="background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:12px;padding:14px 16px;font:500 12.5px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text)">差込キーワード： <b style="color:var(--primary)">{工番}</b> ／ <b style="color:var(--primary)">{お客様名}</b> ／ <b style="color:var(--primary)">{作業日}</b><br>送信時に各案件の情報へ自動で置き換わります。</div></div>' +
+      '<div style="background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:12px;padding:14px 16px;font:500 12.5px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text)">差込キーワード： <b style="color:var(--primary)">{工番}</b> ／ <b style="color:var(--primary)">{お客様名}</b> ／ <b style="color:var(--primary)">{作業日}</b><br>送信時に各案件の情報へ自動で置き換わります。</div>' +
+      (BOOT.folderUrl ? '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px"><div style="font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">📁 保管フォルダ（PDF・サイン）</div><div style="font:500 12px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">クローズ済み案件の作業報告書PDFとサイン画像が、案件ごとのフォルダに保管されます。総務部などと共有してご利用ください。</div><a href="' + esc(BOOT.folderUrl) + '" target="_blank" rel="noopener" style="display:inline-block;height:44px;line-height:44px;padding:0 18px;border:1.5px solid var(--primary);color:var(--primary);border-radius:11px;font:700 13px \'Noto Sans JP\',sans-serif;text-decoration:none">保管フォルダを開く →</a></div>' : '') + '</div>' +
       '<button' + act('saveSettings') + ' style="width:100%;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;margin-top:24px;box-shadow:0 6px 18px var(--primary-shadow)">保存する</button>' +
       (S.settingsSaved ? '<div style="text-align:center;margin-top:14px;font:600 13px \'Noto Sans JP\',sans-serif;color:var(--primary)">保存しました</div>' : '') + '</div>';
   }
@@ -849,7 +850,18 @@
     setSeparate: function (d) { var si = +d.si; setSeparateFn(si, d.val === 'true'); },
     // signature
     clearSig: function () { var c = document.getElementById('sigpad'); if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); },
-    saveSig: function () { var c = document.getElementById('sigpad'); if (c) { var url = c.toDataURL('image/png'); mutateCase(function (o) { return Object.assign({}, o, { signature: url }); }); } ACTIONS.goBack(); },
+    // サインを案件フォルダ(Drive)へ保存し、fileId/表示URLを反映
+    saveSig: function () {
+      var c = document.getElementById('sigpad');
+      if (!c) { ACTIONS.goBack(); return; }
+      var url = c.toDataURL('image/png');
+      var id = S.activeId;
+      setBusy(true);
+      server('saveSignature', id, url).then(function (res) {
+        setState(function (s) { return { busy: false, cases: s.cases.map(function (x) { return x.id === id ? Object.assign({}, x, { signature: res.url || url, signatureFileId: res.fileId }) : x; }) }; });
+        toast('サインを保存しました'); ACTIONS.goBack();
+      }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
+    },
     // save / close / send
     saveCase: function () {
       var f = S.newForm;
@@ -863,12 +875,15 @@
     },
     confirmClose: function () { setState({ closingId: S.activeId }); },
     cancelClose: function () { setState({ closingId: null }); },
-    // 確認印済み案件を保存→サーバーでクローズ（サーバー側でも押印チェック）
+    // クローズ：保存→PDFバックアップ生成(この1回のみ)→サーバーでクローズ（押印チェック）→履歴へ
     doClose: function () {
       var id = S.closingId || S.activeId;
       setState({ closingId: null }); setBusy(true);
-      persistActive().then(function () { return server('closeCase', id); }).then(function () { return reloadState(); })
-        .then(function () { setState({ screen: 'home', history: [] }); toast('クローズしました'); })
+      persistActive()
+        .then(function () { return savePdfBackup(); })      // #pdf-print をキャプチャして Drive 保管
+        .then(function () { return server('closeCase', id); })
+        .then(function () { return reloadState(); })
+        .then(function () { setState({ screen: 'home', history: [] }); toast('クローズしPDFを保管しました'); })
         .catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
     sendNow: function () { var id = S.activeId; setState(function (s) { return { sent: true, cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { status: '完了' }) : c; }) }; }); },
@@ -980,6 +995,36 @@
     w.document.close();
     var go = function () { try { w.focus(); w.print(); } catch (e) {} };
     if (w.document.fonts && w.document.fonts.ready) { w.document.fonts.ready.then(function () { setTimeout(go, 250); }); } else { setTimeout(go, 700); }
+  }
+
+  /* ---------------- PDF backup (client capture → Drive) ---------------- */
+  // プレビュー(#pdf-print)を忠実にキャプチャし、A4 PDF にしてサーバーへ保存。
+  // 生成タイミングはクローズ時の1回のみ（押印は取消可のため、最終確定のクローズで保管）。
+  function savePdfBackup() {
+    return new Promise(function (resolve) {
+      var el = document.getElementById('pdf-print');
+      if (!el || !window.html2canvas || !window.jspdf) { resolve(false); return; }
+      setBusy(true);
+      window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(function (canvas) {
+        var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
+        var pw = 210, ph = 297, margin = 8;
+        var iw = pw - margin * 2;
+        var pxPerMm = canvas.width / iw;
+        var pageHpx = Math.floor((ph - margin * 2) * pxPerMm);
+        var y = 0, page = 0;
+        while (y < canvas.height) {
+          var sliceH = Math.min(pageHpx, canvas.height - y);
+          var c2 = document.createElement('canvas'); c2.width = canvas.width; c2.height = sliceH;
+          var ctx = c2.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c2.width, c2.height);
+          ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+          if (page > 0) pdf.addPage();
+          pdf.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', margin, margin, iw, sliceH / pxPerMm);
+          y += sliceH; page++;
+        }
+        var b64 = pdf.output('datauristring').split(',')[1];
+        server('saveReportPdf', S.activeId, b64).then(function () { resolve(true); }).catch(function (e) { toast(errMsg(e), true); resolve(false); });
+      }).catch(function (e) { toast('PDF生成に失敗しました：' + errMsg(e), true); resolve(false); });
+    });
   }
 
   /* ---------------- boot ---------------- */
