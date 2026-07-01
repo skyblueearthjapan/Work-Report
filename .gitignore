@@ -6,6 +6,16 @@
 node_modules/
 npm-debug.log*
 
+# VPS app secrets / runtime
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite3
+ts-*-state/
+.env.tailscale
+
 # OS
 .DS_Store
 Thumbs.db

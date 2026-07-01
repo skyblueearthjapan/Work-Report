@@ -1,0 +1,12 @@
+.git
+node_modules
+data
+# GAS 版・設計資料・サンプルはイメージに含めない
+src
+design
+Sampledata
+*.zip
+*.md
+.env
+.env.*
+ts-*-state

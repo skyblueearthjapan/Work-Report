@@ -1,0 +1,17 @@
+{
+  "name": "lineworks-worklog",
+  "version": "0.1.0",
+  "private": true,
+  "description": "デジタル作業報告書アプリ（VPS版 / Node + Express）",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
