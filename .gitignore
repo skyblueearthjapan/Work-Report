@@ -1,0 +1,22 @@
+# clasp / GAS
+.clasprc.json
+**/.clasprc.json
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# OMC
+.omc/
+
+# Logs / temp
+*.log
+tmp/
