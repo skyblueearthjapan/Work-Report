@@ -35,6 +35,35 @@ app.get('/api/state', h(() => {
   return { cases: st.cases, historyCount: st.historyCount, settings: store.getSettings(), today: require('./util').todayStr() };
 }));
 
+// フロント起動用の全初期データ（BOOT）
+app.get('/api/boot', h(() => {
+  const st = store.getAppState();
+  const settings = store.getSettings();
+  return {
+    cases: st.cases,
+    historyCount: st.historyCount,
+    settings: settings,
+    company: { companyLW: settings.companyLW || 'LINE W', companyTS: settings.companyTS || 'テクノサービス' },
+    master: (typeof store.getMasterData === 'function' ? store.getMasterData() : { kobans: [], staff: [], depts: [], importedAt: '' }),
+    geminiEnabled: !!process.env.GEMINI_API_KEY,
+    folderUrl: '',
+    today: require('./util').todayStr()
+  };
+}));
+
+// 署名保存（V2: SQLiteにインライン保持。V3でDriveにも保管）
+app.post('/api/cases/:id/signature', h(req => {
+  const dataUrl = (req.body && req.body.dataUrl) || '';
+  store.saveCase({ id: req.params.id, signature: dataUrl });
+  return { url: dataUrl, fileId: '' };
+}));
+
+// PDFバックアップ（V2: no-op。V3でGAS経由Driveへ保管）
+app.post('/api/cases/:id/pdf', h(() => ({ ok: true, note: 'V3でDrive保管に接続' })));
+
+// メール送信（V3でGAS経由Gmailに接続）
+app.post('/api/cases/:id/mail', h(() => { throw new Error('メール送信はV3で有効化されます'); }));
+
 // 案件
 app.get('/api/cases/:id', h(req => store.getCase(req.params.id)));
 app.post('/api/cases', h(req => ({ id: store.saveCase(req.body) })));

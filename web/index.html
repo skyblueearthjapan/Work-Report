@@ -3,26 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>デジタル作業報告書（VPS版・準備中）</title>
-  <style>
-    *{box-sizing:border-box} body{margin:0;font-family:'Noto Sans JP',system-ui,sans-serif;background:#e9ebf0;color:#1b2330}
-    .wrap{max-width:640px;margin:0 auto;padding:48px 24px}
-    .card{background:#fff;border:1px solid #e3e6ec;border-radius:16px;padding:28px;box-shadow:0 8px 24px rgba(16,24,40,.08)}
-    h1{font-size:20px;margin:0 0 8px} .muted{color:#6b7480;font-size:13px;line-height:1.8}
-    code{background:#0f1b2e;color:#cfe0f5;padding:2px 6px;border-radius:6px}
-    #st{margin-top:14px;font-weight:700}
-  </style>
+  <title>デジタル作業報告書</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
 </head>
 <body>
-  <div class="wrap"><div class="card">
-    <h1>デジタル作業報告書（VPS版）</h1>
-    <div class="muted">Node + Express で構築中です。この画面はデプロイ疎通確認用のプレースホルダで、以降のフェーズで本アプリ（全画面・音声入力対応）に置き換わります。</div>
-    <div id="st">サーバー疎通を確認中…</div>
-  </div></div>
+  <div id="root"></div>
+  <!-- LINE W ロゴ -->
+  <script src="/logo.js"></script>
+  <!-- PDFバックアップ生成 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- 起動: /api/boot を取得して window.BOOT を用意してから app.js を読み込む -->
   <script>
-    fetch('/api/health').then(function(r){return r.json();}).then(function(j){
-      document.getElementById('st').textContent = '疎通OK ・ ' + j.app + ' v' + j.version + ' ・ ' + j.time;
-    }).catch(function(e){ document.getElementById('st').textContent = '疎通NG: ' + e; });
+    fetch('/api/boot').then(function (r) { return r.json(); }).then(function (b) {
+      window.BOOT = b;
+      var s = document.createElement('script'); s.src = '/app.js'; document.body.appendChild(s);
+    }).catch(function (e) {
+      document.getElementById('root').textContent = '起動に失敗しました: ' + e;
+    });
   </script>
 </body>
 </html>
