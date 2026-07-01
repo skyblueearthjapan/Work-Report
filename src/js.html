@@ -21,6 +21,24 @@
     for (var i = 0; i < list.length; i++) if (String(list[i].koban).trim() === k) return list[i];
     return null;
   }
+  // 設定の出張部署を配列で
+  function getTravelDepts() {
+    var raw = (S.settings && S.settings.travelDepts) || '';
+    return String(raw).split(/[,、\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  // 部署の全一覧（部署マスタ ∪ 作業員マスタの部署）を出張部署→その他の順で
+  function allDepts() {
+    var set = {}, order = [];
+    (MASTER.depts || []).forEach(function (d) { if (d && !set[d]) { set[d] = 1; order.push(d); } });
+    (MASTER.staff || []).forEach(function (s) { if (s.dept && !set[s.dept]) { set[s.dept] = 1; order.push(s.dept); } });
+    return order;
+  }
+  function pickerDepts() {
+    var all = allDepts(); var travel = getTravelDepts(); var tset = {}; travel.forEach(function (d) { tset[d] = 1; });
+    var head = travel.filter(function (d) { return all.indexOf(d) >= 0; });
+    var rest = all.filter(function (d) { return !tset[d]; });
+    return head.concat(rest);
+  }
 
   /* ---------------- state ---------------- */
   var S = {
@@ -159,6 +177,22 @@
   var confirmRow = "display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:13px 2px;cursor:pointer";
   var staffNumStyle = "width:30px;height:30px;flex:none;border-radius:50%;background:var(--primary);color:#fff;font:800 13px 'Noto Sans JP',sans-serif;display:flex;align-items:center;justify-content:center";
   var pvLab = "font:700 8px 'Noto Sans JP',sans-serif;color:#555";
+  var selStyle = "height:44px;border:1.5px solid var(--border);border-radius:11px;padding:0 10px;font:600 13.5px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface);min-width:0";
+
+  // 名簿からスタッフを追加するピッカー（部署で絞り込み）
+  function staffPicker(scope) {
+    if (!(MASTER.staff || []).length) return ''; // マスター未取込なら非表示
+    var depts = pickerDepts();
+    var cur = S.pickDept || depts[0] || '';
+    if (depts.indexOf(cur) < 0) cur = depts[0] || '';
+    var deptOpts = depts.map(function (d) { return '<option value="' + esc(d) + '"' + (d === cur ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
+    var members = (MASTER.staff || []).filter(function (s) { return s.dept === cur; });
+    var staffOpts = '<option value="">名簿から追加…</option>' + members.map(function (s) { return '<option value="' + esc(s.code) + '">' + esc(s.name) + '</option>'; }).join('');
+    return '<div style="margin-top:6px;padding-top:12px;border-top:1px dashed var(--border)">' +
+      '<div style="' + miniLab + '">名簿から追加（部署で絞り込み）</div>' +
+      '<div style="display:flex;gap:8px"><select' + chg('pickDept') + ' style="' + selStyle + ';flex:1">' + deptOpts + '</select>' +
+      '<select' + chg('addStaffFromMaster', { scope: scope }) + ' style="' + selStyle + ';flex:1">' + staffOpts + '</select></div></div>';
+  }
 
   /* data-act helper: 属性文字列を生成 */
   function act(name, params) {
@@ -367,7 +401,7 @@
       '<div style="' + secLabel + '">作業スタッフ（名前を登録）</div><div style="' + cardStyle + '">' +
       '<div style="font:500 12px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:4px">現場に行くスタッフを登録します。作業時間・移動時間は現場で各自が入力します。</div>' +
       '<div style="display:flex;flex-direction:column;gap:10px">' + staffRows('new', nf) + '</div>' +
-      '<button' + act('addNewStaff') + ' style="' + addBtn + '">＋ スタッフを追加</button></div>' +
+      '<button' + act('addNewStaff') + ' style="' + addBtn + '">＋ スタッフを追加</button>' + staffPicker('new') + '</div>' +
       // 予定
       '<div style="' + secLabel + '">作業予定・指示メモ</div><div style="' + cardStyle + '">' +
       '<div><label style="' + labStyle + '">作業予定日</label>' + input('yoteibi', '', 'date') + '</div>' +
@@ -439,7 +473,7 @@
     var staff = '<div style="' + secLabel + '">作業スタッフ</div><div style="' + cardStyle + '">' +
       '<div style="font:500 12px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted)">現場に行くスタッフを登録します。作業時間・移動時間は下の「作業時間・移動時間」欄で入力します。</div>' +
       '<div style="display:flex;flex-direction:column;gap:10px">' + staffRows('case', r) + '</div>' +
-      '<button' + act('addStaffCase') + ' style="' + addBtn + '">＋ スタッフを追加</button></div>';
+      '<button' + act('addStaffCase') + ' style="' + addBtn + '">＋ スタッフを追加</button>' + staffPicker('case') + '</div>';
 
     var content = '<div style="' + cardStyle + '"><div style="' + secTitle + '">作業内容</div>' +
       '<label style="' + miniLab + '">（原因）</label><textarea' + chg('report', { name: 'genin' }) + ' placeholder="不具合の原因・現状" style="' + taSm + ';margin-bottom:12px">' + rv('genin') + '</textarea>' +
@@ -710,6 +744,15 @@
   /* ---------------- SETTINGS ---------------- */
   function viewSettings() {
     var st = S.settings;
+    var travelSet = {}; getTravelDepts().forEach(function (d) { travelSet[d] = 1; });
+    var deptToggles = allDepts().map(function (d) {
+      var on = !!travelSet[d];
+      return '<button' + act('toggleTravelDept', { dept: d }) + ' style="height:40px;padding:0 14px;border-radius:20px;cursor:pointer;font:700 12.5px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--muted)') + '">' + esc(d) + '</button>';
+    }).join('');
+    var travelSection = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px">' +
+      '<div style="font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">出張部署（名簿の初期表示に使用）</div>' +
+      '<div style="font:500 11.5px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">選択した部署が、スタッフ「名簿から追加」で上位に表示されます。加工班など基本行かない部署の応援も、追加時に部署を選べば呼び出せます。' + (deptToggles ? '' : '（先にマスターを取り込むと部署が表示されます）') + '</div>' +
+      (deptToggles ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + deptToggles + '</div>' : '') + '</div>';
     return '<div style="padding:24px 22px 40px;animation:scin .28s ease both">' +
       '<div style="font:900 20px/1.3 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:20px">送信設定</div>' +
       '<div style="display:flex;flex-direction:column;gap:18px">' +
@@ -718,6 +761,7 @@
       '<div><label style="' + labStyle + '">件名（定型）</label><input class="req"' + chg('settings', { name: 'subject' }) + ' value="' + esc(st.subject) + '" style="' + inpStyle + '"></div>' +
       '<div><label style="' + labStyle + '">本文（定型文）</label><textarea' + chg('settings', { name: 'body' }) + ' style="width:100%;height:180px;border:1.5px solid var(--border);border-radius:13px;padding:14px 16px;font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(st.body) + '</textarea></div>' +
       '<div style="background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:12px;padding:14px 16px;font:500 12.5px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text)">差込キーワード： <b style="color:var(--primary)">{工番}</b> ／ <b style="color:var(--primary)">{お客様名}</b> ／ <b style="color:var(--primary)">{作業日}</b><br>送信時に各案件の情報へ自動で置き換わります。</div>' +
+      travelSection +
       (BOOT.folderUrl ? '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px"><div style="font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">📁 保管フォルダ（PDF・サイン）</div><div style="font:500 12px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">クローズ済み案件の作業報告書PDFとサイン画像が、案件ごとのフォルダに保管されます。総務部などと共有してご利用ください。</div><a href="' + esc(BOOT.folderUrl) + '" target="_blank" rel="noopener" style="display:inline-block;height:44px;line-height:44px;padding:0 18px;border:1.5px solid var(--primary);color:var(--primary);border-radius:11px;font:700 13px \'Noto Sans JP\',sans-serif;text-decoration:none">保管フォルダを開く →</a></div>' : '') + '</div>' +
       '<button' + act('saveSettings') + ' style="width:100%;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;margin-top:24px;box-shadow:0 6px 18px var(--primary-shadow)">保存する</button>' +
       (S.settingsSaved ? '<div style="text-align:center;margin-top:14px;font:600 13px \'Noto Sans JP\',sans-serif;color:var(--primary)">保存しました</div>' : '') + '</div>';
@@ -870,6 +914,25 @@
     menuEdit: function () { var id = S.menuId; var c = findCase(id); if (!c) return; setState(function (s) { return { editId: id, draftType: c.type, newForm: JSON.parse(JSON.stringify(c)), menuId: null, nfError: false, history: s.history.concat(['home']), screen: 'newForm' }; }); },
     menuDup: function () { var id = S.menuId; setState({ menuId: null }); setBusy(true); server('duplicateCase', id).then(function () { return reloadState(); }).then(function () { toast('複製しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); },
     menuDelete: function () { var id = S.menuId; setState({ menuId: null }); setBusy(true); server('deleteCase', id).then(function () { return reloadState(); }).then(function () { toast('削除しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); },
+    // 名簿から作業員を追加（空行があれば埋める、なければ追加）
+    addStaffFromMaster: function (d) {
+      var code = d.val; if (!code) return;
+      var st = (MASTER.staff || []).filter(function (x) { return x.code === code; })[0];
+      if (!st) return;
+      mutate(d.scope, function (o) {
+        var staff = o.staff.slice(); var emptyIdx = -1;
+        for (var i = 0; i < staff.length; i++) { if (!String(staff[i].name).trim()) { emptyIdx = i; break; } }
+        if (emptyIdx >= 0) staff[emptyIdx] = Object.assign({}, staff[emptyIdx], { name: st.name });
+        else staff = staff.concat([{ id: uid('s'), name: st.name, separate: false }]);
+        return Object.assign({}, o, { staff: staff });
+      });
+    },
+    // 設定：出張部署のトグル（保存前のローカル変更）
+    toggleTravelDept: function (d) {
+      var dept = d.dept; var cur = getTravelDepts(); var i = cur.indexOf(dept);
+      if (i >= 0) cur.splice(i, 1); else cur.push(dept);
+      setState(function (s) { return { settings: Object.assign({}, s.settings, { travelDepts: cur.join(',') }), settingsSaved: false }; });
+    },
     addNewStaff: function () { mutate('new', function (o) { return Object.assign({}, o, { staff: o.staff.concat([{ id: uid('s'), name: '', separate: false }]) }); }); },
     addStaffCase: function () { mutate('case', function (o) { return Object.assign({}, o, { staff: o.staff.concat([{ id: uid('s'), name: '', separate: false }]) }); }); },
     removeStaff: function (d) { var si = +d.si; mutate(d.scope, function (o) { return Object.assign({}, o, { staff: o.staff.length > 1 ? o.staff.filter(function (_, i) { return i !== si; }) : o.staff }); }); },
@@ -1019,6 +1082,8 @@
     kaninName: function (d, val) { mutate(d.scope, function (o) { return Object.assign({}, o, { kanin: Object.assign({}, o.kanin || {}, { name: val }) }); }); },
     timeRow: function (d, val) { updateTime(d, d.field, val); },
     histQuery: function (d, val) { setState({ histQuery: val }); loadHistory(); },
+    pickDept: function (d, val) { setState({ pickDept: val }); },
+    addStaffFromMaster: function (d, val) { ACTIONS.addStaffFromMaster({ scope: d.scope, val: val }); },
     voiceText: function (d, val) { setState({ vRaw: val }); },
     plateFile: function (d, val, el) { var f = el.files && el.files[0]; if (!f) return; var rd = new FileReader(); rd.onload = function () { setState({ plateImg: rd.result, plateResult: null }); }; rd.readAsDataURL(f); }
   };
