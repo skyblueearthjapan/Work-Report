@@ -675,6 +675,7 @@
         '<div style="font:500 13.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:20px">設定された送信先に、PDFと定型文で送信します。</div>' +
         '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:18px">' +
         '<div style="display:flex;padding:15px 16px;border-bottom:1px solid var(--border)"><span style="width:72px;font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted);flex:none">送信先</span><span style="font:600 14px \'Noto Sans JP\',sans-serif;color:var(--text);word-break:break-all">' + esc(st.email) + '</span></div>' +
+        (st.cc ? '<div style="display:flex;padding:15px 16px;border-bottom:1px solid var(--border)"><span style="width:72px;font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted);flex:none">CC</span><span style="font:600 14px \'Noto Sans JP\',sans-serif;color:var(--text);word-break:break-all">' + esc(st.cc) + '</span></div>' : '') +
         '<div style="display:flex;padding:15px 16px;border-bottom:1px solid var(--border)"><span style="width:72px;font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted);flex:none">件名</span><span style="font:600 14px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(fillTemplate(st.subject, active)) + '</span></div>' +
         '<div style="display:flex;padding:15px 16px;border-bottom:1px solid var(--border)"><span style="width:72px;font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted);flex:none">添付</span><span style="font:600 14px \'Noto Sans JP\',sans-serif;color:var(--primary)">' + esc(pdfName(active) + '.pdf') + '</span></div>' +
         '<div style="padding:15px 16px"><div style="font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:8px">本文</div><div style="font:500 13.5px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:14px">' + esc(fillTemplate(st.body, active)) + '</div></div></div>' +
@@ -695,7 +696,8 @@
     return '<div style="padding:24px 22px 40px;animation:scin .28s ease both">' +
       '<div style="font:900 20px/1.3 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:20px">送信設定</div>' +
       '<div style="display:flex;flex-direction:column;gap:18px">' +
-      '<div><label style="' + labStyle + '">送信先メールアドレス</label><input class="req"' + chg('settings', { name: 'email' }) + ' value="' + esc(st.email) + '" inputmode="email" style="' + inpStyle + '"></div>' +
+      '<div><label style="' + labStyle + '">送信先（TO）・複数可</label><input class="req"' + chg('settings', { name: 'email' }) + ' value="' + esc(st.email) + '" inputmode="email" placeholder="例：a@example.com, b@example.com" style="' + inpStyle + '"><div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-top:5px">カンマ・スペース・改行区切りで複数指定できます。</div></div>' +
+      '<div><label style="' + labStyle + '">CC（任意・複数可）</label><input' + chg('settings', { name: 'cc' }) + ' value="' + esc(st.cc || '') + '" inputmode="email" placeholder="例：kanri@example.com, soumu@example.com" style="' + inpStyle + '"></div>' +
       '<div><label style="' + labStyle + '">件名（定型）</label><input class="req"' + chg('settings', { name: 'subject' }) + ' value="' + esc(st.subject) + '" style="' + inpStyle + '"></div>' +
       '<div><label style="' + labStyle + '">本文（定型文）</label><textarea' + chg('settings', { name: 'body' }) + ' style="width:100%;height:180px;border:1.5px solid var(--border);border-radius:13px;padding:14px 16px;font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(st.body) + '</textarea></div>' +
       '<div style="background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:12px;padding:14px 16px;font:500 12.5px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text)">差込キーワード： <b style="color:var(--primary)">{工番}</b> ／ <b style="color:var(--primary)">{お客様名}</b> ／ <b style="color:var(--primary)">{作業日}</b><br>送信時に各案件の情報へ自動で置き換わります。</div>' +
@@ -751,8 +753,8 @@
     if (S.closingId) {
       out += '<div' + act('cancelClose') + ' style="position:absolute;inset:0;background:rgba(15,23,42,.42);z-index:50;display:flex;align-items:center;justify-content:center;padding:28px">' +
         '<div' + act('stop') + ' style="width:100%;max-width:420px;background:var(--surface);border-radius:20px;padding:24px;animation:scin .2s ease both">' +
-        '<div style="font:900 18px/1.4 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:10px">印刷・PDF保存 ／ クローズ</div>' +
-        '<div style="font:500 13px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:18px">PDFを保存・印刷、または会社へメール送信したうえで、クローズしてください。クローズすると案件ストック一覧から外れ、履歴管理に保管されます（データは残ります）。</div>' +
+        '<div style="font:900 18px/1.4 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:10px">クローズ（完了）</div>' +
+        '<div style="font:500 13px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:18px">「クローズする」を押すと、この内容でPDFを生成し、設定の宛先（TO／CC）へ<b style="color:var(--primary)">自動でメール送信</b>したうえでクローズします。案件はストック一覧から外れ、履歴管理に保管されます（データは残ります）。手動で先に印刷・送信も可能です。</div>' +
         '<div style="display:flex;gap:10px;margin-bottom:10px"><button' + act('printPdf') + ' style="flex:1;height:50px;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);border-radius:12px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">印刷・PDF保存</button><button' + act('goSend') + ' style="flex:1;height:50px;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);border-radius:12px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">メール送信</button></div>' +
         '<div style="display:flex;gap:12px"><button' + act('cancelClose') + ' style="flex:1;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">キャンセル</button><button' + act('doClose') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">クローズする</button></div></div></div>';
     }
@@ -896,15 +898,20 @@
     },
     confirmClose: function () { setState({ closingId: S.activeId }); },
     cancelClose: function () { setState({ closingId: null }); },
-    // クローズ：保存→PDFバックアップ生成(この1回のみ)→サーバーでクローズ（押印チェック）→履歴へ
+    // クローズ：保存→PDF生成(この1回)→そのPDFを添付して自動メール送信→サーバーでクローズ→履歴へ
     doClose: function () {
       var id = S.closingId || S.activeId;
+      var sent = false;
       setState({ closingId: null }); setBusy(true);
       persistActive()
-        .then(function () { return savePdfBackup(); })      // #pdf-print をキャプチャして Drive 保管
+        .then(function () { return savePdfBackup(); })       // #pdf-print をキャプチャして Drive 保管
+        .then(function () {                                    // 生成したPDFを添付して自動送信（TO/CC）
+          return server('sendReportMail', id).then(function () { sent = true; })
+            .catch(function (e) { toast('メール送信をスキップ/失敗：' + errMsg(e), true); });
+        })
         .then(function () { return server('closeCase', id); })
         .then(function () { return reloadState(); })
-        .then(function () { setState({ screen: 'home', history: [] }); toast('クローズしPDFを保管しました'); })
+        .then(function () { setState({ screen: 'home', history: [] }); toast(sent ? 'クローズし、PDFをメール送信・保管しました' : 'クローズしPDFを保管しました（メール未送信）'); })
         .catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
     // 保管PDFを添付して実送信（GmailApp）→ ステータス完了に同期

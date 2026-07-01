@@ -29,6 +29,7 @@ var CASE_COLUMNS = [
 function defaultSettings_() {
   return {
     email: 'genba-report@line-works.co.jp',
+    cc: '',
     subject: '【作業報告書】{工番} {お客様名}',
     body: 'お疲れ様です。\n下記案件の作業報告書をお送りいたします。\n\n' +
           '■工番：{工番}\n■お客様：{お客様名} 様\n■作業日：{作業日}\n\n' +
