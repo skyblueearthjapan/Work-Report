@@ -110,7 +110,23 @@
   function fillTemplate(str, c) { if (!str) return ''; return str.replace(/\{工番\}/g, c ? c.koban : '').replace(/\{お客様名\}/g, c ? c.nohinSaki : '').replace(/\{作業日\}/g, c ? fmtDate(c.yoteibi) : ''); }
   function pdfName(c) { if (!c) return '作業報告書'; var safe = function (x) { return String(x || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim(); }; var d = c.yoteibi || TODAY; return ['作業報告書', safe(c.nohinSaki), safe(c.kishu), safe(c.koban), safe(d)].filter(Boolean).join('_'); }
   function staffNamesOf(c) { var ns = (c.staff || []).map(function (x) { return x.name; }).filter(Boolean); return ns.length ? ns.join('・') : '—'; }
-  function findCase(id) { for (var i = 0; i < S.cases.length; i++) if (S.cases[i].id === id) return S.cases[i]; return null; }
+  function findCase(id) {
+    var i;
+    for (i = 0; i < S.cases.length; i++) if (S.cases[i].id === id) return S.cases[i];
+    var h = S.historyList || [];
+    for (i = 0; i < h.length; i++) if (h[i].id === id) return h[i];
+    return null;
+  }
+  // サイン画像(dataURL)は一覧取得に含めないため、案件を開いたとき個別に読み込んで反映
+  function patchCaseSignature(id) {
+    server('getCase', id).then(function (full) {
+      if (!full) return;
+      setState(function (s) {
+        var patch = function (c) { return c.id === id ? Object.assign({}, c, { signature: full.signature || '', signatureFileId: full.signatureFileId || c.signatureFileId }) : c; };
+        return { cases: s.cases.map(patch), historyList: (s.historyList || []).map(patch) };
+      });
+    }).catch(function () {});
+  }
 
   /* ---------------- style tokens (プロト renderVals と一致) ---------------- */
   var navy = { '--primary': '#1d3b63', '--primary-deep': '#13284a', '--primary-soft': '#eef2f8', '--primary-tint': '#cfdaea', '--primary-shadow': 'rgba(29,59,99,.28)' };
@@ -828,7 +844,7 @@
     pickLW: function () { setState(function (s) { return { draftType: 'LW', editId: null, newForm: blankForm('LW'), nfError: false, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
     pickTS: function () { setState(function (s) { return { draftType: 'TS', editId: null, newForm: blankForm('TS'), nfError: false, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
     setNewStatus: function (d) { setState(function (s) { return { newForm: Object.assign({}, s.newForm, { status: d.val }) }; }); },
-    openCase: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat([s.screen]), screen: 'report' }; }); },
+    openCase: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat([s.screen]), screen: 'report' }; }); patchCaseSignature(d.id); },
     openMenu: function (d) { setState({ menuId: d.id }); },
     closeMenu: function () { setState({ menuId: null }); },
     stop: function (e) { if (e) e.stopPropagation(); },
@@ -906,7 +922,7 @@
       }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
     printPdf: function () { doPrint(); },
-    openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview' }; }); },
+    openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview' }; }); patchCaseSignature(d.id); },
     // voice (mock; S6 で Gemini 実装)
     openVoice: function () { setState({ voiceOpen: true, vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false }); },
     closeVoice: function () { stopRec(); setState({ voiceOpen: false, vListening: false }); },

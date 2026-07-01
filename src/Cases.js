@@ -203,12 +203,19 @@ function saveCase(caseObj) {
   }
 }
 
+// サーバーが管理するファイル/フォルダID。クライアントは追跡しないため、
+// 空値での上書きを禁止して消失（＝フォルダ重複）を防ぐ。
+var SERVER_MANAGED_FIELDS_ = { signatureFileId: 1, pdfFileId: 1, driveFolderId: 1 };
+
 /** 既存ケースに受領オブジェクトのキーだけを浅くマージ。 */
 function mergeCase_(base, incoming) {
   var out = {};
   Object.keys(base).forEach(function (k) { out[k] = base[k]; });
   Object.keys(incoming).forEach(function (k) {
-    if (incoming[k] !== undefined) out[k] = incoming[k];
+    if (incoming[k] === undefined) return;
+    // サーバー管理IDは、空で送られてきたら既存値を保持
+    if (SERVER_MANAGED_FIELDS_[k] && !incoming[k]) return;
+    out[k] = incoming[k];
   });
   // signature 表示用フィールドは行に保存しない
   delete out.signature;

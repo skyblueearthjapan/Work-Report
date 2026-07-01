@@ -1,57 +1,87 @@
-# Work Report
+# デジタル作業報告書アプリ（GAS）
 
-作業報告書に関するツール群を管理するリポジトリです。GitHub と Google Apps Script（スプレッドシートバインド型）を [clasp](https://github.com/google/clasp) 経由で連携して管理します。
+現場（タブレット）と管理（PC）で使う作業報告書アプリを、**Google Apps Script（スプレッドシートバインド型 Web App）**として実装したものです。GitHub と GAS を [clasp](https://github.com/google/clasp) で連携管理しています。
 
-## 構成
+- 設計の正: `design/untitled/project/`（`作業報告書アプリ.dc.html`＝UI/ロジック、`GAS実装_引き継ぎ仕様書.dc.html`＝引継仕様）
+- スクリプトID: `1t7Oefa1OFg929nOJraIN460MuzU4Yx_ASvRWvDTb_yDwATj9t3OuAm4M`（`.clasp.json`）
+
+## 画面（全9）
+トップ（案件ストック）／工番種別選択（LW・TS）／新規・編集／作業報告書入力／サイン／PDFプレビュー／メール送信／設定／履歴管理
+
+## アーキテクチャ
 
 ```
-Work Report/
-├── src/                 # GAS プロジェクト（clasp rootDir）
-│   ├── Code.js
-│   └── appsscript.json
-├── Sampledata/          # 作業報告書のサンプル PDF / Excel
-├── .clasp.json          # GAS プロジェクトとのリンク（scriptId）
-├── .gitignore
-└── README.md
+src/
+├── appsscript.json     # Web App設定（executeAs=デプロイ者 / access=組織内）＋OAuthスコープ
+├── Code.js             # doGet / include / 起動データ getBootData_ / 共通ユーティリティ
+├── Setup.js            # シート・列・Driveフォルダの用意、カスタムメニュー、サンプル投入
+├── Cases.js            # 案件CRUD、行⇔オブジェクト変換、stampKanin、getAppState
+├── Settings.js         # 設定(送信先/件名/本文)の取得・保存（設定シート）
+├── Drive.js            # 案件別フォルダ、サイン保存、PDFバックアップ保存
+├── Mail.js             # GmailApp 送信（保管PDF添付・定型文差込）
+├── Ai.js               # Gemini（処置整形／銘板OCR）UrlFetchApp
+├── SampleData.js       # サンプル案件6件
+├── index.html          # シェル（BOOT埋め込み、ライブラリ読込）
+├── css.html            # 基盤スタイル（フォント・keyframes）
+├── logo.html           # LINE W ロゴ（base64）
+└── js.html             # フロント本体（状態機械・全画面・モーダル・サーバー結線）
 ```
 
-## GAS プロジェクト
+外部ライブラリ（CDN）: html2canvas / jsPDF（PDFバックアップ生成用）。
 
-- **スクリプトID**: `1t7Oefa1OFg929nOJraIN460MuzU4Yx_ASvRWvDTb_yDwATj9t3OuAm4M`
-- **エディタ**: https://script.google.com/home/projects/1t7Oefa1OFg929nOJraIN460MuzU4Yx_ASvRWvDTb_yDwATj9t3OuAm4M/edit
-- **種別**: スプレッドシートバインド型
-- **タイムゾーン**: Asia/Tokyo / ランタイム: V8
+## データ保存
 
-## clasp の使い方
+### スプレッドシート（バインド先＝アプリDB）
+- **案件** シート：1案件=1行。ネスト（スタッフ・作業/移動時間・確認事項・作業種別）はJSON列。列は引継書の35列＋`pdfFileId`/`driveFolderId`。
+- **設定** シート：`key/value` 縦持ち（送信先メール・件名・本文・ブランド名）。
 
-初回のみ認証が必要です（`imaizumi@lineworks-local.info`）:
-
-```bash
-clasp login
+### Google Drive（案件ごと1フォルダ方式）
 ```
-
-### リモート（GAS）→ ローカルへ取得
-
-```bash
-clasp pull
+📁 作業報告書アプリ_保管フォルダ            ← 1アプリ1つ。総務部等と共有する親フォルダ
+   └─ 📁 工番_お客様名_作業日                ← 案件フォルダ
+        ├─ 📄 作業報告書_お客様名_装置名_工番_日付.pdf   ← PDFバックアップ（クローズ時に生成）
+        └─ 🖊 サイン_工番_日付.png                        ← お客様サイン画像
 ```
+- 親フォルダのURLは**設定画面「保管フォルダを開く →」**から開けます（共有導線）。
+- 保管はデプロイ実行者（管理者アカウント）のドライブに作成されます。
 
-### ローカル → リモート（GAS）へ反映
+## 初期セットアップ（初回のみ）
 
-```bash
-clasp push
-```
+1. バインド先スプレッドシートを開く → メニュー **「作業報告書アプリ」**
+   - **初期化＋サンプル投入**：シート/フォルダ作成＋サンプル6件
+   - **初期化のみ**：シート/フォルダ作成のみ
+2. （任意）**「Gemini APIキーを設定」**：AI機能（音声整形・銘板OCR）を有効化。キーは `Script Properties` の `GEMINI_API_KEY` に保存。**未設定でもアプリは動作**（簡易整形・手入力へフォールバック）。
 
-> `.clasp.json` の `rootDir` が `src` を指しているため、GAS のファイルは `src/` 配下で管理します。
+## Web App（デプロイ）
 
-## 開発フロー
+- 公開範囲：**組織内の全員**（`lineworks-local.info`）／実行ユーザー：**デプロイ者**（データを1アカウントに集約）。
+- デプロイは **clasp で単一デプロイIDを更新**（同一URL）:
+  ```bash
+  clasp push -f
+  clasp deploy -i <DEPLOYMENT_ID> --description "変更内容"
+  ```
+- Web App URL（`/exec`）を現場タブレット・PCで開いて利用。
 
-1. `clasp pull` で最新の GAS コードを取得
-2. `src/` 配下でコードを編集
-3. `clasp push` で GAS へ反映
-4. `git add` / `git commit` / `git push` で GitHub に履歴を保存
+## 運用フロー（一気通貫）
+1. 管理者：種別選択（LW/TS）→ 案件を新規登録（ストック）
+2. 現場：案件を開く → 作業報告書入力（作業種別・原因/処理・確認事項・スタッフ別 作業/移動時間・音声/銘板AI）
+3. お客様：PDFプレビュー →「サインをする」（Drive保存）
+4. 責任者：確認印（未押印は印刷・クローズ不可）
+5. 印刷・PDF保存／メール送信（保管PDF添付・定型文差込）
+6. クローズ（完了）→ **PDFバックアップ生成**→ トップから外れ**履歴**へ
+7. 履歴：フリーワード横断検索（工番/製番/お客様名/装置名/日付、AND・大小無視）・LW/TS絞り込み・再表示/再印刷
 
-## 注意
+## 主要業務ルール
+- 新規は必ず LW/TS を先に選択（LWのみ納品番号）。
+- 確認印（電子印）が押されるまで印刷・PDF保存・クローズ不可（サーバーでも検証）。
+- クローズ＝`archived=true`＋`closedAt`記録（削除しない）。履歴から再表示・再印刷。
+- スタッフ `separate=false` は共通の作業/移動を共有（連名）、`true` のみ個別。
+- 合計・1日合計は保存せず表示時に算出。
+- 区分は 有償/無償/調整中。「製造」は確認印側。
 
-- 認証情報 `.clasprc.json` は `.gitignore` 済み（コミットしないこと）
-- `.clasp.json` の `scriptId` は秘匿情報ではないためコミット対象
+## 開発メモ
+- ローカル構文チェック：各 `src/*.js` は `node --check`、`js.html` は `<script>`抽出後にチェック。
+- サーバー関数はすべて `google.script.run`（`js.html` の `server()` でPromise化）から呼び出し。
+
+## 別途支給（暫定値・要差し替え）
+Gemini APIキー ／ 送信先メール（既定 `genba-report@line-works.co.jp`）／ 自社正式名称・住所（既定：株式会社ラインワークス 〒262-0012 千葉市花見川区千種町53 Tel 043-250-0165 Fax 043-257-9488、TS＝テクノサービス）。
