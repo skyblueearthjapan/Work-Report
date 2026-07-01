@@ -9,7 +9,7 @@
 
 var PROP_GEMINI_KEY = 'GEMINI_API_KEY';
 var PROP_GEMINI_MODEL = 'GEMINI_MODEL';
-var DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
+var DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
 function getGeminiKey_() {
   var k = PropertiesService.getScriptProperties().getProperty(PROP_GEMINI_KEY);
