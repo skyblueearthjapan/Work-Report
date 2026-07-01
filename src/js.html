@@ -911,12 +911,36 @@
     openVoice: function () { setState({ voiceOpen: true, vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false }); },
     closeVoice: function () { stopRec(); setState({ voiceOpen: false, vListening: false }); },
     toggleListen: function () { toggleListen(); },
-    aiFormatVoice: function () { var raw = (S.vRaw + ' ' + S.vInterim).trim(); stopRec(); setState({ vListening: false, vProcessing: true, vResult: '' }); setTimeout(function () { setState({ vProcessing: false, vResult: mockSummarize(raw) }); }, 1200); },
+    aiFormatVoice: function () {
+      var raw = (S.vRaw + ' ' + S.vInterim).trim(); stopRec();
+      setState({ vListening: false, vProcessing: true, vResult: '' });
+      // 入力が空、または Gemini 未設定ならモック整形にフォールバック
+      if (!raw || !BOOT.geminiEnabled) { setTimeout(function () { setState({ vProcessing: false, vResult: mockSummarize(raw) }); }, 700); return; }
+      server('aiFormatShori', raw).then(function (text) {
+        setState({ vProcessing: false, vResult: text || mockSummarize(raw) });
+      }).catch(function (e) {
+        setState({ vProcessing: false, vResult: mockSummarize(raw) });
+        toast('AI整形に失敗したため簡易整形しました：' + errMsg(e), true);
+      });
+    },
     applyVoice: function () { var res = S.vResult; if (res) mutateCase(function (o) { return Object.assign({}, o, { shori: (o.shori ? o.shori + '\n' : '') + res }); }); setState({ voiceOpen: false, vListening: false }); },
     // plate (mock; S6 で Gemini Vision 実装)
     openPlate: function () { setState({ plateOpen: true, plateImg: '', plateProcessing: false, plateResult: null }); },
     closePlate: function () { setState({ plateOpen: false }); },
-    aiReadPlate: function () { if (!S.plateImg) return; setState({ plateProcessing: true, plateResult: null }); setTimeout(function () { var c = findCase(S.activeId) || {}; setState({ plateProcessing: false, plateResult: { kishu: c.kishu || 'LN-3000', katashiki: c.katashiki || 'CT-3000', seiban: c.seiban || '25-0083', nenGappi: c.nenGappi || '2025-03' } }); }, 1500); },
+    aiReadPlate: function () {
+      if (!S.plateImg) return;
+      setState({ plateProcessing: true, plateResult: null });
+      var mockPlate = function () { var c = findCase(S.activeId) || {}; return { kishu: c.kishu || 'LN-3000', katashiki: c.katashiki || 'CT-3000', seiban: c.seiban || '25-0083', nenGappi: c.nenGappi || '2025-03' }; };
+      if (!BOOT.geminiEnabled) { setTimeout(function () { setState({ plateProcessing: false, plateResult: mockPlate() }); }, 900); return; }
+      downscaleDataUrl(S.plateImg, 1600).then(function (small) {
+        return server('aiReadPlate', small);
+      }).then(function (res) {
+        setState({ plateProcessing: false, plateResult: res });
+      }).catch(function (e) {
+        setState({ plateProcessing: false, plateResult: mockPlate() });
+        toast('銘板のAI読み取りに失敗したため暫定値を表示しました：' + errMsg(e), true);
+      });
+    },
     applyPlate: function () { var res = S.plateResult, id = S.activeId; if (res && id) { setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { kishu: res.kishu, katashiki: res.katashiki, seiban: res.seiban, nenGappi: res.nenGappi }) : c; }), plateOpen: false }; }); } else ACTIONS.closePlate(); }
   };
 
@@ -1041,6 +1065,25 @@
         var b64 = pdf.output('datauristring').split(',')[1];
         server('saveReportPdf', S.activeId, b64).then(function () { resolve(true); }).catch(function (e) { toast(errMsg(e), true); resolve(false); });
       }).catch(function (e) { toast('PDF生成に失敗しました：' + errMsg(e), true); resolve(false); });
+    });
+  }
+
+  // 銘板画像を長辺 maxDim に縮小して JPEG dataURL に（Gemini送信の軽量化）
+  function downscaleDataUrl(dataUrl, maxDim) {
+    return new Promise(function (resolve) {
+      try {
+        var img = new Image();
+        img.onload = function () {
+          var w = img.width, h = img.height;
+          var scale = Math.min(1, maxDim / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+          cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+          resolve(cv.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = function () { resolve(dataUrl); };
+        img.src = dataUrl;
+      } catch (e) { resolve(dataUrl); }
     });
   }
 

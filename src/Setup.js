@@ -163,6 +163,8 @@ function onOpen() {
       .createMenu('作業報告書アプリ')
       .addItem('初期化＋サンプル投入', 'setupWithSampleData')
       .addItem('初期化のみ', 'ensureSetup_')
+      .addSeparator()
+      .addItem('Gemini APIキーを設定', 'setGeminiApiKeyPrompt')
       .addToUi();
   } catch (err) {
     // UI 非対応コンテキストでは無視

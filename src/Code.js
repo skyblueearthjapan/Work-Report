@@ -32,6 +32,7 @@ function getBootData_() {
     settings: getSettings(),
     company: getCompany(),
     folderUrl: getAppFolderUrl(),
+    geminiEnabled: isGeminiEnabled(),
     today: todayStr_()
   };
 }
