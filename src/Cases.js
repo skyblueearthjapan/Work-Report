@@ -96,6 +96,25 @@ function insertCaseRow_(sh, c) {
 
 /* ---------- 公開 API（google.script.run から呼ぶ） ---------- */
 
+/**
+ * トップ表示に必要な状態を一括取得（未クローズ案件＋履歴件数）。
+ * 1回のシート走査で両方を返し、往復を減らす。
+ */
+function getAppState() {
+  var sh = getCasesSheet_();
+  var last = sh.getLastRow();
+  var cases = [], hist = 0;
+  if (last >= 2) {
+    var rows = sh.getRange(2, 1, last - 1, CASE_COLUMNS.length).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i][0]) continue;
+      var c = rowToCase_(rows[i]);
+      if (c.archived) hist++; else cases.push(c);
+    }
+  }
+  return { cases: sortByUpdatedDesc_(cases), historyCount: hist };
+}
+
 /** 未クローズ案件の配列（トップ用）。新しい順。 */
 function getCases() {
   var sh = getCasesSheet_();

@@ -19,11 +19,53 @@
     voiceOpen: false, vListening: false, vRaw: '', vInterim: '', vProcessing: false, vResult: '', vError: '',
     plateOpen: false, plateImg: '', plateProcessing: false, plateResult: null,
     histQuery: '', histType: 'all', closingId: null,
+    historyList: [], historyLoading: false,
+    archivedCount: BOOT.historyCount || 0,
+    busy: false, toastMsg: '', toastErr: false,
     mode: 'tablet',
     newForm: blankForm('LW'),
     settings: BOOT.settings || {},
     cases: (BOOT.cases || [])
   };
+
+  /* ---------------- server bridge ---------------- */
+  // google.script.run を Promise 化。GAS の HtmlService(モダンChrome iframe)で Promise 利用可。
+  function server(fn) {
+    var args = [].slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+      runner[fn].apply(runner, args);
+    });
+  }
+  function errMsg(e) { return (e && e.message) ? e.message : String(e || 'エラーが発生しました'); }
+  var _toastTimer = null;
+  function toast(msg, isErr) {
+    setState({ toastMsg: msg, toastErr: !!isErr });
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () { setState({ toastMsg: '' }); }, isErr ? 5000 : 2200);
+  }
+  function setBusy(v) { setState({ busy: v }); }
+  // 案件一覧＋履歴件数をサーバーから再取得して state を同期
+  function reloadState(then) {
+    setBusy(true);
+    return server('getAppState').then(function (st) {
+      setState({ cases: st.cases, archivedCount: st.historyCount, busy: false });
+      if (then) then();
+    }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
+  }
+  // アクティブ案件をサーバーへ保存（署名dataURLはサーバー側で無視＝S4でDrive化）
+  function persistActive() {
+    var c = findCase(S.activeId);
+    if (!c) return Promise.resolve();
+    return server('saveCase', c);
+  }
+  // 履歴をサーバー検索して state に格納
+  function loadHistory() {
+    setState({ historyLoading: true });
+    server('getHistory', S.histQuery, S.histType).then(function (rows) {
+      setState({ historyList: rows || [], historyLoading: false });
+    }).catch(function (e) { setState({ historyLoading: false }); toast(errMsg(e), true); });
+  }
 
   function setState(patch) {
     var next = (typeof patch === 'function') ? patch(S) : patch;
@@ -153,8 +195,12 @@
       '<div class="scr" style="flex:1;overflow-y:auto;position:relative">' + body + '</div>' +
       modals + '</div></div>';
 
+    var overlays = '';
+    if (S.busy) overlays += '<div style="position:fixed;top:0;left:0;right:0;z-index:200;display:flex;justify-content:center;pointer-events:none"><div style="margin-top:12px;background:rgba(15,23,42,.86);color:#fff;padding:8px 16px;border-radius:20px;font:700 12.5px \'Noto Sans JP\',sans-serif;display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>処理中…</div></div>';
+    if (S.toastMsg) overlays += '<div style="position:fixed;bottom:24px;left:0;right:0;z-index:200;display:flex;justify-content:center;pointer-events:none"><div style="background:' + (S.toastErr ? '#b03a2e' : 'rgba(15,23,42,.9)') + ';color:#fff;padding:11px 20px;border-radius:12px;font:700 13px \'Noto Sans JP\',sans-serif;max-width:80%;box-shadow:0 8px 24px rgba(0,0,0,.24)">' + esc(S.toastMsg) + '</div></div>';
+
     root.setAttribute('style', rootStyle);
-    root.innerHTML = frame;
+    root.innerHTML = frame + overlays;
 
     var scr2 = root.querySelector('.scr'); if (scr2) scr2.scrollTop = prevScroll;
     if (S.screen === 'sign') attachSig();
@@ -204,13 +250,13 @@
   function viewHome(isPC) {
     var visible = S.cases.filter(function (c) { return !c.archived; });
     var filtered = visible.filter(function (c) { return S.filter === 'all' || c.type === S.filter; });
-    var archived = S.cases.filter(function (c) { return c.archived; });
+    var archivedCount = S.archivedCount;
     var mkChip = function (key, label) { var on = S.filter === key; return '<button' + act('setFilter', { val: key }) + ' style="height:42px;padding:0 18px;border-radius:21px;cursor:pointer;font:700 13.5px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--muted)') + '">' + label + '</button>'; };
 
     var head = '<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px">' +
       '<div><div style="font:900 22px/1.2 \'Noto Sans JP\',sans-serif;color:var(--text)">案件ストック</div>' +
       '<div style="font:500 13px/1.4 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-top:4px">出張前に登録した案件 ・ 全 ' + visible.length + ' 件</div></div>' +
-      '<button' + act('goHistory') + ' style="flex:none;height:42px;padding:0 16px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:11px;font:700 13px \'Noto Sans JP\',sans-serif;cursor:pointer">履歴 ' + archived.length + '</button></div>' +
+      '<button' + act('goHistory') + ' style="flex:none;height:42px;padding:0 16px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:11px;font:700 13px \'Noto Sans JP\',sans-serif;cursor:pointer">履歴 ' + archivedCount + '</button></div>' +
       '<button' + act('goNewType') + ' style="width:100%;height:62px;border:none;border-radius:16px;background:var(--primary);color:#fff;font:700 17px \'Noto Sans JP\',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 18px var(--primary-shadow)"><span style="font-size:24px;line-height:1">＋</span> 新規案件を登録</button>';
 
     var body;
@@ -643,14 +689,8 @@
 
   /* ---------------- HISTORY ---------------- */
   function viewHistory() {
-    var archived = S.cases.filter(function (c) { return c.archived; });
-    var hq = (S.histQuery || '').trim().toLowerCase();
-    var filtered = archived.filter(function (c) {
-      if (S.histType !== 'all' && c.type !== S.histType) return false;
-      if (!hq) return true;
-      var hay = [c.koban, c.motoKoban, c.seiban, c.nohinSaki, c.okyakuSub, c.kishu, c.katashiki, c.kobanName, c.tantou, fmtDate(c.closedAt), fmtDate(c.yoteibi), c.closedAt, c.yoteibi].filter(Boolean).join(' ').toLowerCase();
-      return hq.split(/\s+/).every(function (t) { return hay.indexOf(t) !== -1; });
-    });
+    var filtered = S.historyList || [];
+    var archivedTotal = S.archivedCount;
     var mkChip = function (key, label) { var on = S.histType === key; return '<button' + act('setHistType', { val: key }) + ' style="height:38px;padding:0 16px;border-radius:19px;cursor:pointer;font:700 12.5px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--muted)') + '">' + label + '</button>'; };
     var rows = filtered.map(function (c) {
       return '<button' + act('openHistory', { id: c.id }) + ' style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 18px;cursor:pointer;display:block">' +
@@ -660,11 +700,12 @@
         '<div style="font:700 15px/1.4 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">' + esc(c.kobanName) + '</div>' +
         '<div style="display:flex;flex-wrap:wrap;column-gap:16px;row-gap:4px;font:500 12.5px \'Noto Sans JP\',sans-serif;color:var(--muted)"><span>納品先 ： ' + esc(c.nohinSaki) + '</span><span>装置 ： ' + esc(c.kishu || '—') + '</span><span>製番 ： ' + esc(c.seiban || '—') + '</span><span>クローズ日 ： ' + esc(fmtDate(c.closedAt)) + '</span></div></button>';
     }).join('');
-    var empty = archived.length === 0 ? '<div style="text-align:center;padding:50px 0;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--muted)">クローズ済みの案件はまだありません。</div>' : (filtered.length === 0 ? '<div style="text-align:center;padding:50px 0;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--muted)">条件に一致する履歴が見つかりません。</div>' : '');
-    var hasQ = !!(S.histQuery || S.histType !== 'all');
+    var empty = S.historyLoading ? '<div style="text-align:center;padding:50px 0;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--muted)">読み込み中…</div>'
+      : (archivedTotal === 0 ? '<div style="text-align:center;padding:50px 0;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--muted)">クローズ済みの案件はまだありません。</div>'
+        : (filtered.length === 0 ? '<div style="text-align:center;padding:50px 0;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--muted)">条件に一致する履歴が見つかりません。</div>' : ''));
     return '<div style="padding:22px 22px 40px;animation:scin .28s ease both">' +
       '<div style="font:900 20px/1.3 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">履歴管理</div>' +
-      '<div style="font:500 13px/1.5 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:16px">クローズ済みの作業報告書 ・ ' + filtered.length + ' / ' + archived.length + ' 件（データは保管されています）</div>' +
+      '<div style="font:500 13px/1.5 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:16px">クローズ済みの作業報告書 ・ ' + filtered.length + ' / ' + archivedTotal + ' 件（データは保管されています）</div>' +
       '<div style="position:relative;margin-bottom:12px"><span style="position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--muted)">🔍</span>' +
       '<input' + chg('histQuery') + ' value="' + esc(S.histQuery) + '" placeholder="工番・製番・お客様名・装置名・日付で検索" style="width:100%;height:52px;border:1.5px solid var(--border);border-radius:13px;padding:0 44px;font:600 14.5px \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface)">' +
       (S.histQuery ? '<button' + act('clearHistQuery') + ' style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;background:var(--bg);color:var(--muted);border-radius:8px;font-size:16px;cursor:pointer">✕</button>' : '') + '</div>' +
@@ -761,18 +802,23 @@
   function mutate(scope, fn) { if (scope === 'new') setState(function (s) { return { newForm: fn(Object.assign({}, s.newForm)) }; }); else mutateCase(fn); }
 
   var ACTIONS = {
-    goBack: function () { setState(function (s) { var h = s.history.slice(); var prev = h.pop() || 'home'; return { history: h, screen: prev }; }); },
-    goHome: function () { setState({ screen: 'home', history: [] }); },
+    goBack: function () { var fromReport = S.screen === 'report'; setState(function (s) { var h = s.history.slice(); var prev = h.pop() || 'home'; return { history: h, screen: prev }; }); if (fromReport) persistActive().then(function () { return reloadState(); }).catch(function (e) { toast(errMsg(e), true); }); },
+    // report の「一時保存」：アクティブ案件をサーバー保存してからトップへ
+    goHome: function () {
+      var fromReport = S.screen === 'report';
+      if (fromReport) { setBusy(true); persistActive().then(function () { return reloadState(); }).then(function () { setState({ screen: 'home', history: [] }); toast('保存しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); }
+      else { setState({ screen: 'home', history: [] }); }
+    },
     goSettings: function () { nav('settings'); },
-    goHistory: function () { nav('history'); },
+    goHistory: function () { nav('history'); loadHistory(); },
     goNewType: function () { pushNav('newType'); },
     goSign: function () { nav('sign'); },
-    goPreview: function () { nav('preview'); },
+    goPreview: function () { var fromReport = S.screen === 'report'; nav('preview'); if (fromReport) persistActive().catch(function (e) { toast(errMsg(e), true); }); },
     goSend: function () { setState(function (s) { return { history: s.history.concat([s.screen]), screen: 'send', sent: false }; }); },
-    finishToHome: function () { setState({ screen: 'home', history: [], sent: false }); },
+    finishToHome: function () { setState({ screen: 'home', history: [], sent: false }); reloadState(); },
     setFilter: function (d) { setState({ filter: d.val }); },
-    setHistType: function (d) { setState({ histType: d.val }); },
-    clearHistQuery: function () { setState({ histQuery: '', histType: 'all' }); },
+    setHistType: function (d) { setState({ histType: d.val }); loadHistory(); },
+    clearHistQuery: function () { setState({ histQuery: '', histType: 'all' }); loadHistory(); },
     pickLW: function () { setState(function (s) { return { draftType: 'LW', editId: null, newForm: blankForm('LW'), nfError: false, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
     pickTS: function () { setState(function (s) { return { draftType: 'TS', editId: null, newForm: blankForm('TS'), nfError: false, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
     setNewStatus: function (d) { setState(function (s) { return { newForm: Object.assign({}, s.newForm, { status: d.val }) }; }); },
@@ -781,8 +827,8 @@
     closeMenu: function () { setState({ menuId: null }); },
     stop: function (e) { if (e) e.stopPropagation(); },
     menuEdit: function () { var id = S.menuId; var c = findCase(id); if (!c) return; setState(function (s) { return { editId: id, draftType: c.type, newForm: JSON.parse(JSON.stringify(c)), menuId: null, nfError: false, history: s.history.concat(['home']), screen: 'newForm' }; }); },
-    menuDup: function () { var id = S.menuId; var c = findCase(id); if (!c) return; var nc = JSON.parse(JSON.stringify(c)); nc.id = 'c' + Date.now(); nc.koban = c.koban + '-複製'; nc.status = '未着手'; nc.signature = ''; nc.archived = false; nc.kanin = { stamped: false, name: (c.kanin && c.kanin.name) || '' }; setState(function (s) { return { cases: [nc].concat(s.cases), menuId: null }; }); },
-    menuDelete: function () { var id = S.menuId; setState(function (s) { return { cases: s.cases.filter(function (c) { return c.id !== id; }), menuId: null, activeId: s.activeId === id ? null : s.activeId }; }); },
+    menuDup: function () { var id = S.menuId; setState({ menuId: null }); setBusy(true); server('duplicateCase', id).then(function () { return reloadState(); }).then(function () { toast('複製しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); },
+    menuDelete: function () { var id = S.menuId; setState({ menuId: null }); setBusy(true); server('deleteCase', id).then(function () { return reloadState(); }).then(function () { toast('削除しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); },
     addNewStaff: function () { mutate('new', function (o) { return Object.assign({}, o, { staff: o.staff.concat([{ id: uid('s'), name: '', separate: false }]) }); }); },
     addStaffCase: function () { mutate('case', function (o) { return Object.assign({}, o, { staff: o.staff.concat([{ id: uid('s'), name: '', separate: false }]) }); }); },
     removeStaff: function (d) { var si = +d.si; mutate(d.scope, function (o) { return Object.assign({}, o, { staff: o.staff.length > 1 ? o.staff.filter(function (_, i) { return i !== si; }) : o.staff }); }); },
@@ -808,13 +854,23 @@
     saveCase: function () {
       var f = S.newForm;
       if (!String(f.koban).trim() || !String(f.nohinSaki).trim()) { setState({ nfError: true }); return; }
-      if (S.editId) { var eid = S.editId; setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === eid ? Object.assign({}, c, f) : c; }), screen: 'home', history: [], editId: null }; }); return; }
-      var nc = Object.assign({}, f, { id: 'c' + Date.now(), oshaName: f.oshaName || f.nohinSaki, tantoushaName: f.tantoushaName || (f.staff[0] ? f.staff[0].name : '') });
-      setState(function (s) { return { cases: [nc].concat(s.cases), screen: 'home', history: [] }; });
+      var wasEdit = !!S.editId;
+      setBusy(true);
+      server('saveCase', f).then(function () { return reloadState(); }).then(function () {
+        setState({ screen: 'home', history: [], editId: null });
+        toast(wasEdit ? '変更を保存しました' : 'ストックに保存しました');
+      }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
     confirmClose: function () { setState({ closingId: S.activeId }); },
     cancelClose: function () { setState({ closingId: null }); },
-    doClose: function () { var id = S.closingId || S.activeId; setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { archived: true, status: 'クローズ', closedAt: TODAY }) : c; }), closingId: null, screen: 'home', history: [] }; }); },
+    // 確認印済み案件を保存→サーバーでクローズ（サーバー側でも押印チェック）
+    doClose: function () {
+      var id = S.closingId || S.activeId;
+      setState({ closingId: null }); setBusy(true);
+      persistActive().then(function () { return server('closeCase', id); }).then(function () { return reloadState(); })
+        .then(function () { setState({ screen: 'home', history: [] }); toast('クローズしました'); })
+        .catch(function (e) { setBusy(false); toast(errMsg(e), true); });
+    },
     sendNow: function () { var id = S.activeId; setState(function (s) { return { sent: true, cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { status: '完了' }) : c; }) }; }); },
     saveSettings: function () { setState({ settingsSaved: true }); },
     printPdf: function () { doPrint(); },
@@ -852,7 +908,7 @@
     staffName: function (d, val) { var si = +d.si; mutate(d.scope, function (o) { return Object.assign({}, o, { staff: o.staff.map(function (st, i) { return i === si ? Object.assign({}, st, { name: val }) : st; }) }); }); },
     kaninName: function (d, val) { mutate(d.scope, function (o) { return Object.assign({}, o, { kanin: Object.assign({}, o.kanin || {}, { name: val }) }); }); },
     timeRow: function (d, val) { updateTime(d, d.field, val); },
-    histQuery: function (d, val) { setState({ histQuery: val }); },
+    histQuery: function (d, val) { setState({ histQuery: val }); loadHistory(); },
     voiceText: function (d, val) { setState({ vRaw: val }); },
     plateFile: function (d, val, el) { var f = el.files && el.files[0]; if (!f) return; var rd = new FileReader(); rd.onload = function () { setState({ plateImg: rd.result, plateResult: null }); }; rd.readAsDataURL(f); }
   };

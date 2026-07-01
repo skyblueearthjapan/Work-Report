@@ -23,10 +23,12 @@ function include(name) {
   return HtmlService.createHtmlOutputFromFile(name).getContent();
 }
 
-/** 起動時の初期データ（一覧・設定・種別ラベル）をまとめて返す。 */
+/** 起動時の初期データ（一覧・履歴件数・設定・種別ラベル）をまとめて返す。 */
 function getBootData_() {
+  var state = getAppState();
   return {
-    cases: getCases(),
+    cases: state.cases,
+    historyCount: state.historyCount,
     settings: getSettings(),
     company: getCompany(),
     today: todayStr_()
