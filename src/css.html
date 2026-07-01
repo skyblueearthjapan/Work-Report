@@ -1,5 +1,20 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-  /* Section 2 で本実装。ここでは疎通確認用の最小スタイル。 */
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #e9ebf0; color: #1b2330; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  input,textarea,button,select{font-family:inherit}
+  input:focus,textarea:focus{outline:none}
+  input.req:invalid,textarea.req:invalid{border-color:#d92d20 !important}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#c7ccd6;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  .scr{scrollbar-width:thin}
+  button{font-family:inherit}
+  @keyframes scin{from{transform:translateY(6px);opacity:.4}to{transform:none;opacity:1}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media print{
+    @page{size:A4;margin:11mm}
+    body{background:#fff}
+  }
 </style>

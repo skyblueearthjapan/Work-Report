@@ -8,17 +8,12 @@
   <?!= include('css'); ?>
 </head>
 <body>
-  <!-- Section 2 で全9画面を実装。現在はデータ層の疎通確認用プレースホルダ。 -->
-  <div id="app" style="padding:24px;font-family:'Noto Sans JP',sans-serif">
-    <h2>デジタル作業報告書（セットアップ確認）</h2>
-    <p id="status">初期データを読み込み中…</p>
-    <pre id="dump" style="background:#0f1b2e;color:#cfe0f5;padding:12px;border-radius:8px;overflow:auto;max-height:60vh"></pre>
-  </div>
-
-  <!-- doGet が埋め込む初期データ -->
+  <div id="root"></div>
   <script>
+    // doGet が埋め込む初期データ（案件一覧・設定・ブランド名・today）
     window.BOOT = <?!= JSON.stringify(boot) ?>;
   </script>
+  <?!= include('logo'); ?>
   <?!= include('js'); ?>
 </body>
 </html>
