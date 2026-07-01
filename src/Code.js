@@ -78,3 +78,21 @@ function toBool_(v) {
   if (typeof v === 'string') return v.toLowerCase() === 'true';
   return !!v;
 }
+
+/** 'YYYY-MM-DD' → 'YYYY/MM/DD'（メール差込等の表示用）。 */
+function fmtDateJp_(d) {
+  if (!d) return '';
+  var p = String(d).split('-');
+  if (p.length === 3) return p.join('/');
+  if (p.length === 2) return p.join('/');
+  return String(d);
+}
+
+/** 定型文の差込（{工番}{お客様名}{作業日}）。フロント fillTemplate と同仕様。 */
+function fillTemplate_(str, c) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\{工番\}/g, (c && c.koban) || '')
+    .replace(/\{お客様名\}/g, (c && c.nohinSaki) || '')
+    .replace(/\{作業日\}/g, (c && fmtDateJp_(c.yoteibi)) || '');
+}

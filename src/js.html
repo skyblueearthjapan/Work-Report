@@ -815,7 +815,12 @@
     goNewType: function () { pushNav('newType'); },
     goSign: function () { nav('sign'); },
     goPreview: function () { var fromReport = S.screen === 'report'; nav('preview'); if (fromReport) persistActive().catch(function (e) { toast(errMsg(e), true); }); },
-    goSend: function () { setState(function (s) { return { history: s.history.concat([s.screen]), screen: 'send', sent: false }; }); },
+    // メール送信画面へ。プレビュー(#pdf-print)がある間にPDFを用意してから遷移（添付用）
+    goSend: function () {
+      var doNav = function () { setState(function (s) { return { history: s.history.concat([s.screen]), screen: 'send', sent: false }; }); };
+      if (document.getElementById('pdf-print')) { setBusy(true); savePdfBackup().then(function () { setState({ busy: false }); doNav(); }); }
+      else { doNav(); }
+    },
     finishToHome: function () { setState({ screen: 'home', history: [], sent: false }); reloadState(); },
     setFilter: function (d) { setState({ filter: d.val }); },
     setHistType: function (d) { setState({ histType: d.val }); loadHistory(); },
@@ -886,8 +891,20 @@
         .then(function () { setState({ screen: 'home', history: [] }); toast('クローズしPDFを保管しました'); })
         .catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
-    sendNow: function () { var id = S.activeId; setState(function (s) { return { sent: true, cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { status: '完了' }) : c; }) }; }); },
-    saveSettings: function () { setState({ settingsSaved: true }); },
+    // 保管PDFを添付して実送信（GmailApp）→ ステータス完了に同期
+    sendNow: function () {
+      var id = S.activeId; setBusy(true);
+      server('sendReportMail', id).then(function () { return reloadState(); })
+        .then(function () { setState({ busy: false, sent: true }); })
+        .catch(function (e) { setBusy(false); toast(errMsg(e), true); });
+    },
+    // 設定をサーバー(設定シート)へ保存
+    saveSettings: function () {
+      setBusy(true);
+      server('saveSettings', S.settings).then(function (saved) {
+        setState({ busy: false, settings: saved || S.settings, settingsSaved: true }); toast('保存しました');
+      }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
+    },
     printPdf: function () { doPrint(); },
     openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview' }; }); },
     // voice (mock; S6 で Gemini 実装)
