@@ -9,11 +9,17 @@ const express = require('express');
 const store = require('./store');
 const { gasCall, gasConfigured } = require('./gas');
 const ai = require('./ai');
+const auth = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 5174;
+app.set('trust proxy', true); // Funnel/リバースプロキシ背後
 
 app.use(express.json({ limit: '30mb' })); // 署名dataURL・音声・PDFの受け渡しを見越して
+
+// 認証ルート(/auth/*, /api/me) と保護ミドルウェア（未設定時は素通り）
+auth.install(app);
+app.use(auth.middleware());
 
 // GAS 委譲に渡す案件メタ（フォルダ名/ファイル名生成に必要な最小限）
 function caseMeta(c) {
