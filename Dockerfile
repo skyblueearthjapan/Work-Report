@@ -3,6 +3,10 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
+# better-sqlite3 の native ビルド用ツール（プリビルド無い場合の保険）
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 # 依存だけ先に入れてレイヤキャッシュを効かせる
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
