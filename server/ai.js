@@ -11,6 +11,9 @@ function key() { const k = process.env.GEMINI_API_KEY; if (!k) throw new Error('
 function enabled() { return !!process.env.GEMINI_API_KEY; }
 
 async function callGemini(payload) {
+  // 2.5系の思考(thinking)を無効化。有効だと推論文が出力に混ざるため。
+  payload.generationConfig = payload.generationConfig || {};
+  if (payload.generationConfig.thinkingConfig === undefined) payload.generationConfig.thinkingConfig = { thinkingBudget: 0 };
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(MODEL) + ':generateContent?key=' + encodeURIComponent(key());
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   const text = await res.text();
