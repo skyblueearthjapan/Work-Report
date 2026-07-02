@@ -11,6 +11,13 @@
   var TODAY = BOOT.today || '2026-06-30';
   var WT = ['据付', '移設', '納品', '点検', '改造', '修理', '調査'];
   var MASTER = BOOT.master || { kobans: [], staff: [], depts: [], importedAt: '' };
+  // 文字数上限（PDFレイアウト崩れ防止・延々入力の抑止）
+  var LIMIT = { genin: 400, shori: 800 };
+  // 文字数カウンタ表示（live更新は下部の input リスナ）
+  function taCounter(id, len, max) {
+    var over = len > max;
+    return '<div id="' + id + '" data-cmax="' + max + '" style="text-align:right;font:600 10.5px \'Noto Sans JP\',sans-serif;color:' + (over ? '#c0392b' : 'var(--muted)') + ';margin-top:3px">' + len + ' / ' + max + '</div>';
+  }
 
   // 工番マスタから該当工番を検索（前後空白無視）
   function masterKoban(koban) {
@@ -469,8 +476,8 @@
       '<div style="' + secLabel + '">作業内容（事前登録）</div><div style="' + cardStyle + '">' +
       '<div><div style="' + miniLab + '">作業種別（該当を選択・複数可）</div><div style="display:flex;flex-wrap:wrap;gap:9px">' + wtButtons('new', nf) + '</div></div>' +
       '<div style="display:flex;gap:18px;flex-wrap:wrap"><div><div style="' + miniLab + '">区分</div><div style="display:flex;gap:8px">' + paidButtons('new', nf.paid) + '</div></div></div>' +
-      '<div><label style="' + labStyle + '">（原因）</label><textarea' + chg('nf', { name: 'genin' }) + ' placeholder="不具合の原因・現状（事前にわかる範囲で）" style="' + taSm + '">' + f('genin') + '</textarea></div>' +
-      '<div><label style="' + labStyle + '">（処理）</label><textarea' + chg('nf', { name: 'shori' }) + ' placeholder="予定している処理・作業指示" style="' + taMd + '">' + f('shori') + '</textarea></div>' +
+      '<div><label style="' + labStyle + '">（原因）</label><textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-nf-genin"' + chg('nf', { name: 'genin' }) + ' placeholder="不具合の原因・現状（事前にわかる範囲で）" style="' + taSm + '">' + f('genin') + '</textarea>' + taCounter('cnt-nf-genin', String(nf.genin || '').length, LIMIT.genin) + '</div>' +
+      '<div><label style="' + labStyle + '">（処理）</label><textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-nf-shori"' + chg('nf', { name: 'shori' }) + ' placeholder="予定している処理・作業指示" style="' + taMd + '">' + f('shori') + '</textarea>' + taCounter('cnt-nf-shori', String(nf.shori || '').length, LIMIT.shori) + '</div>' +
       '<div><div style="' + miniLab + '">作業終了時の確認事項</div><div style="display:flex;flex-direction:column">' + confirmButtons('new', nf) + '</div></div></div>' +
       (S.nfError ? '<div style="margin-top:14px;background:#fdecea;border:1px solid #f5c6c0;color:#b03a2e;border-radius:12px;padding:12px 16px;font:600 13px \'Noto Sans JP\',sans-serif">工番№・お客様名は必須項目です。</div>' : '') +
       '</div>';
@@ -513,9 +520,9 @@
       '<button' + act('addStaffCase') + ' style="' + addBtn + '">＋ スタッフを追加</button>' + staffPicker('case') + '</div>';
 
     var content = '<div style="' + cardStyle + '"><div style="' + secTitle + '">作業内容</div>' +
-      '<label style="' + miniLab + '">（原因）</label><textarea' + chg('report', { name: 'genin' }) + ' placeholder="不具合の原因・現状" style="' + taSm + ';margin-bottom:12px">' + rv('genin') + '</textarea>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><label style="' + miniLab + ';margin-bottom:0">（処理）</label><button' + act('openVoice') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">🎤 音声で入力</button></div>' +
-      '<textarea' + chg('report', { name: 'shori' }) + ' placeholder="実施した処理・作業の結果（音声入力も可）" style="' + taMd + '">' + rv('shori') + '</textarea></div>';
+      '<label style="' + miniLab + '">（原因）</label><textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-genin"' + chg('report', { name: 'genin' }) + ' placeholder="不具合の原因・現状" style="' + taSm + '">' + rv('genin') + '</textarea>' + taCounter('cnt-genin', String(r.genin || '').length, LIMIT.genin) +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 7px"><label style="' + miniLab + ';margin-bottom:0">（処理）</label><button' + act('openVoice') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">🎤 音声で入力</button></div>' +
+      '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-shori"' + chg('report', { name: 'shori' }) + ' placeholder="実施した処理・作業の結果（音声入力も可）" style="' + taMd + '">' + rv('shori') + '</textarea>' + taCounter('cnt-shori', String(r.shori || '').length, LIMIT.shori) + '</div>';
 
     var plate = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="' + secTitle + ';margin-bottom:0">銘板情報</div><button' + act('openPlate') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">📷 銘板を撮影</button></div>' +
       '<div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">設備の銘板を撮影すると、AIが各項目を自動で読み取ります。</div>' +
@@ -885,12 +892,12 @@
         '<div style="display:flex;gap:10px"><button' + act('aiFormatVoice') + ' style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">やり直す</button><button' + act('applyVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">処置に反映する</button></div>';
     } else {
       inner = '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--muted)">認識テキスト（手入力も可）</div>' + (S.vListening ? '<div style="font:700 11px \'Noto Sans JP\',sans-serif;color:#c0392b">● 録音中…</div>' : '') + '</div>' +
-        '<textarea' + chg('voiceText') + ' placeholder="マイクで話すか、ここに直接入力できます。（空のまま「AIで整える」を押すとサンプル文が生成されます）" style="width:100%;height:120px;border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font:500 14px/1.7 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(S.vRaw) + '</textarea>' +
+        '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-vraw"' + chg('voiceText') + ' placeholder="マイクで話すか、ここに直接入力できます。" style="width:100%;height:120px;border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font:500 14px/1.7 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(S.vRaw) + '</textarea>' + taCounter('cnt-vraw', String(S.vRaw || '').length, LIMIT.shori) +
         (S.vListening ? '<div style="font:500 13px/1.6 \'Noto Sans JP\',sans-serif;color:var(--primary);margin-top:6px;min-height:18px">' + esc(S.vInterim) + '</div>' : '') + '</div>' +
         '<div style="display:flex;gap:10px"><button' + act('toggleListen') + ' style="flex:1;height:52px;border:1.5px solid ' + (S.vListening ? '#c0392b' : 'var(--primary)') + ';background:' + (S.vListening ? '#fdecea' : '#fff') + ';color:' + (S.vListening ? '#c0392b' : 'var(--primary)') + ';border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">' + (S.vListening ? '● 録音を停止' : '🎤 録音を開始') + '</button><button' + act('aiFormatVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">✨ AIで整える</button></div>';
     }
     return '<div' + act('closeVoice') + ' style="position:absolute;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px">' +
-      '<div' + act('stop') + ' style="width:100%;max-width:520px;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
+      '<div' + act('stop') + ' style="width:100%;max-width:520px;max-height:calc(100% - 48px);overflow-y:auto;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">🎤</span><div style="font:900 18px \'Noto Sans JP\',sans-serif;color:var(--text)">処置を音声で入力</div></div>' +
       '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:12px">マイクで話した内容をAIが報告書向けの文章に整えます。</div>' +
       styleSelector() +
@@ -918,7 +925,7 @@
       inner = imgBox + actionArea;
     }
     return '<div' + act('closePlate') + ' style="position:absolute;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px">' +
-      '<div' + act('stop') + ' style="width:100%;max-width:520px;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
+      '<div' + act('stop') + ' style="width:100%;max-width:520px;max-height:calc(100% - 48px);overflow-y:auto;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📷</span><div style="font:900 18px \'Noto Sans JP\',sans-serif;color:var(--text)">銘板を撮影して自動入力</div></div>' +
       '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:16px">アルミ銘板を撮影すると、AIが機種・型式・製番・製造年月を読み取ります。</div>' +
       inner +
@@ -1094,7 +1101,17 @@
         toast('AI整形に失敗したため簡易整形しました：' + errMsg(e), true);
       });
     },
-    applyVoice: function () { var res = S.vResult; if (res) mutateCase(function (o) { return Object.assign({}, o, { shori: (o.shori ? o.shori + '\n' : '') + res }); }); setState({ voiceOpen: false, vListening: false }); },
+    applyVoice: function () {
+      var res = S.vResult;
+      if (!res) { setState({ voiceOpen: false, vListening: false }); return; }
+      var c = findCase(S.activeId) || {};
+      var combined = (c.shori ? c.shori + '\n' : '') + res;
+      var truncated = combined.length > LIMIT.shori;
+      var capped = combined.slice(0, LIMIT.shori);
+      mutateCase(function (o) { return Object.assign({}, o, { shori: capped }); });
+      setState({ voiceOpen: false, vListening: false });
+      if (truncated) toast('処理は最大' + LIMIT.shori + '文字のため一部を省略しました', true);
+    },
     // plate (mock; S6 で Gemini Vision 実装)
     openPlate: function () { setState({ plateOpen: true, plateImg: '', plateProcessing: false, plateResult: null }); },
     closePlate: function () { setState({ plateOpen: false }); },
@@ -1171,6 +1188,14 @@
     var name = el.getAttribute('data-chg');
     var fn = CHANGES[name]; if (!fn) return;
     fn(datasetOf(el), el.value, el);
+  });
+  // 文字数カウンタの live 更新（再描画なしでカウンタだけ書き換え、フォーカス維持）
+  document.addEventListener('input', function (e) {
+    var el = e.target; if (!el || !el.getAttribute) return;
+    var cid = el.getAttribute('data-counter'); if (!cid) return;
+    var c = document.getElementById(cid); if (!c) return;
+    var max = +c.getAttribute('data-cmax') || 0; var n = (el.value || '').length;
+    c.textContent = n + ' / ' + max; c.style.color = n >= max ? '#c0392b' : '';
   });
   function datasetOf(el) { var d = {}; for (var i = 0; i < el.attributes.length; i++) { var a = el.attributes[i]; if (a.name.indexOf('data-') === 0 && a.name !== 'data-act' && a.name !== 'data-chg') d[a.name.slice(5)] = a.value; } return d; }
 
