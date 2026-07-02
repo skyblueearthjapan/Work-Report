@@ -32,11 +32,15 @@
     (MASTER.staff || []).forEach(function (s) { if (s.dept && !set[s.dept]) { set[s.dept] = 1; order.push(s.dept); } });
     return order;
   }
+  // 既定は出張部署のみ。S.pickAllDepts=true のときだけ全部署（出張部署を上位）を表示。
   function pickerDepts() {
-    var all = allDepts(); var travel = getTravelDepts(); var tset = {}; travel.forEach(function (d) { tset[d] = 1; });
-    var head = travel.filter(function (d) { return all.indexOf(d) >= 0; });
-    var rest = all.filter(function (d) { return !tset[d]; });
-    return head.concat(rest);
+    var all = allDepts();
+    var travel = getTravelDepts().filter(function (d) { return all.indexOf(d) >= 0; });
+    if (S.pickAllDepts) {
+      var tset = {}; travel.forEach(function (d) { tset[d] = 1; });
+      return travel.concat(all.filter(function (d) { return !tset[d]; }));
+    }
+    return travel.length ? travel : all; // 出張部署が未設定なら全部署
   }
 
   /* ---------------- state ---------------- */
@@ -216,10 +220,15 @@
     var deptOpts = depts.map(function (d) { return '<option value="' + esc(d) + '"' + (d === cur ? ' selected' : '') + '>' + esc(d) + '</option>'; }).join('');
     var members = (MASTER.staff || []).filter(function (s) { return s.dept === cur; });
     var staffOpts = '<option value="">名簿から追加…</option>' + members.map(function (s) { return '<option value="' + esc(s.code) + '">' + esc(s.name) + '</option>'; }).join('');
+    var allCount = allDepts().length;
+    var toggle = (allCount > depts.length || S.pickAllDepts)
+      ? '<button' + act('togglePickAll') + ' style="margin-top:8px;height:32px;padding:0 12px;border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:8px;font:600 11.5px \'Noto Sans JP\',sans-serif;cursor:pointer">' + (S.pickAllDepts ? '出張部署のみ表示に戻す' : '他部署も表示（応援要員など）') + '</button>'
+      : '';
     return '<div style="margin-top:6px;padding-top:12px;border-top:1px dashed var(--border)">' +
-      '<div style="' + miniLab + '">名簿から追加（部署で絞り込み）</div>' +
+      '<div style="' + miniLab + '">名簿から追加（' + (S.pickAllDepts ? '全部署' : '出張部署') + 'で絞り込み）</div>' +
       '<div style="display:flex;gap:8px"><select' + chg('pickDept') + ' style="' + selStyle + ';flex:1">' + deptOpts + '</select>' +
-      '<select' + chg('addStaffFromMaster', { scope: scope }) + ' style="' + selStyle + ';flex:1">' + staffOpts + '</select></div></div>';
+      '<select' + chg('addStaffFromMaster', { scope: scope }) + ' style="' + selStyle + ';flex:1">' + staffOpts + '</select></div>' +
+      toggle + '</div>';
   }
 
   /* data-act helper: 属性文字列を生成 */
@@ -972,6 +981,8 @@
         toast('マスターを最新に更新しました（工番' + (c.kobans || 0) + '・作業員' + (c.staff || 0) + '・部署' + (c.depts || 0) + '）');
       }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
+    // 名簿ピッカー：出張部署のみ ⇔ 全部署 の切替
+    togglePickAll: function () { setState({ pickAllDepts: !S.pickAllDepts, pickDept: '' }); },
     // 設定：出張部署のトグル（保存前のローカル変更）
     toggleTravelDept: function (d) {
       var dept = d.dept; var cur = getTravelDepts(); var i = cur.indexOf(dept);
