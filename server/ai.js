@@ -44,21 +44,48 @@ function checkMedia(p, allowPrefix) {
   if (allowPrefix && String(p.mime || '').indexOf(allowPrefix) !== 0) throw new Error('対応していない形式です: ' + p.mime);
 }
 
-async function formatShori(textInput) {
+// 整形スタイル指定（自動判断がデフォルト）
+function styleLine(style) {
+  switch (style) {
+    case 'bullet': return '・構成は必ず ● を使った箇条書きにする（各項目は簡潔に）。';
+    case 'number': return '・構成は必ず ①②③… の番号付き手順にする。';
+    case 'heading': return '・内容を【原因】【作業内容】【結果】などの見出しで区分する（該当する見出しのみ使用。各見出しの下は簡潔に）。';
+    case 'plain': return '・箇条書きや見出しは使わず、自然な文章（1〜数文）にする。';
+    default: return '・内容に応じて最適な構成を自動で選ぶ（単純→自然文／手順が複数→①②③／並列項目→●／原因・作業・結果が混在→【見出し】で区分）。';
+  }
+}
+// 「処置」欄向けの共通整形指示（音声・テキスト共用）
+function instruction(style) {
+  return [
+    'あなたは製造設備の保守報告の校正者です。入力内容を、作業報告書の「処置」欄に載せる読みやすい文章へ整えてください。',
+    '【厳守事項】',
+    '・事実のみ。推測・誇張・入力に無い情報の追加は禁止。',
+    '・敬体（です・ます調）。専門用語・数値・型式・寸法はそのまま保持。',
+    '・言い淀み（えー/あの/なんか 等）・重複・不要な前置きは除去。',
+    '・使用してよい記号は ●（箇条書き）／ ①②③（番号）／ 【見出し】 のみ。Markdown(#,*,**)や表は使わない。',
+    '・出力は整形後の本文のみ（説明・思考・前置きは一切書かない）。',
+    styleLine(style),
+    '',
+    '【出力例】',
+    '入力「ブレーキ交換して動作確認オッケー」→ 「ブレーキを交換し、動作確認を実施しました。異常はありませんでした。」',
+    '入力「まず分解して清掃、その後グリス入れて組み立て、最後に試運転」→ 「①分解し清掃を実施しました。\n②規定グリスを充填しました。\n③組み立て後、試運転を行い正常を確認しました。」',
+    '入力「異音の原因は軸受摩耗。軸受交換して芯出しした。試運転で異音消えた」→ 「【原因】\n軸受の摩耗により異音が発生していました。\n【作業内容】\n軸受を交換し、芯出しを実施しました。\n【結果】\n試運転にて異音の解消を確認しました。」'
+  ].join('\n');
+}
+
+async function formatShori(textInput, style) {
   const input = String(textInput || '').trim();
   if (!input) throw new Error('整形するテキストが空です');
   if (input.length > 20000) throw new Error('テキストが長すぎます');
-  const prompt = 'あなたは製造設備の保守報告の校正者です。次の口述メモを、作業報告書の「処置」欄向けに、' +
-    '事実のみ・敬体（です・ます調）・簡潔な文章へ整えてください。推測や誇張はせず、箇条書きにはせず自然な文章にし、整形後の本文のみを出力してください。\n\n【口述メモ】\n' + input;
+  const prompt = instruction(style) + '\n\n【入力】\n' + input;
   const out = await callGemini({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } });
   return String(out).trim();
 }
 
-async function transcribe(audio, mime) {
+async function transcribe(audio, mime, style) {
   const p = dataUrlParts(audio, mime || 'audio/webm');
   checkMedia(p, 'audio/');
-  const prompt = 'この音声を日本語で文字起こしし、現場作業報告書の「処置」欄に入れる文章へ整えてください。' +
-    '事実のみ・敬体・簡潔に。言い淀み・重複・不要な前置きは除去し、整形後の本文のみを出力してください。';
+  const prompt = 'まず音声を日本語で文字起こしし、その内容を次の方針で整えてください。\n\n' + instruction(style);
   const out = await callGemini({
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: p.mime, data: p.data } }] }],
     generationConfig: { temperature: 0.2 }

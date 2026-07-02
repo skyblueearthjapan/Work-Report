@@ -136,8 +136,8 @@ app.post('/api/cases/:id/mail', ha(async req => {
 }));
 
 // AI（Gemini）: 音声文字起こし・処置整形・銘板OCR
-app.post('/api/ai/transcribe', ha(async req => ({ text: await ai.transcribe((req.body && req.body.audio) || '', (req.body && req.body.mime) || 'audio/webm') })));
-app.post('/api/ai/format', ha(async req => ({ text: await ai.formatShori((req.body && req.body.text) || '') })));
+app.post('/api/ai/transcribe', ha(async req => ({ text: await ai.transcribe((req.body && req.body.audio) || '', (req.body && req.body.mime) || 'audio/webm', (req.body && req.body.style) || 'auto') })));
+app.post('/api/ai/format', ha(async req => ({ text: await ai.formatShori((req.body && req.body.text) || '', (req.body && req.body.style) || 'auto') })));
 app.post('/api/ai/plate', ha(async req => await ai.readPlate((req.body && req.body.image) || '')));
 
 // マスター取込（GAS経由で外部シート→SQLiteミラー）

@@ -86,9 +86,9 @@
     saveSignature: function (id, dataUrl) { return _http('POST', '/api/cases/' + encodeURIComponent(id) + '/signature', { dataUrl: dataUrl }); },
     saveReportPdf: function (id, b64) { return _http('POST', '/api/cases/' + encodeURIComponent(id) + '/pdf', { pdfBase64: b64 }); },
     sendReportMail: function (id) { return _http('POST', '/api/cases/' + encodeURIComponent(id) + '/mail'); },
-    aiFormatShori: function (text) { return _http('POST', '/api/ai/format', { text: text }).then(function (r) { return r.text; }); },
+    aiFormatShori: function (text, style) { return _http('POST', '/api/ai/format', { text: text, style: style }).then(function (r) { return r.text; }); },
     aiReadPlate: function (image) { return _http('POST', '/api/ai/plate', { image: image }); },
-    aiTranscribe: function (audio, mime) { return _http('POST', '/api/ai/transcribe', { audio: audio, mime: mime }).then(function (r) { return r.text; }); },
+    aiTranscribe: function (audio, mime, style) { return _http('POST', '/api/ai/transcribe', { audio: audio, mime: mime, style: style }).then(function (r) { return r.text; }); },
     refreshMaster: function () { return _http('POST', '/api/master/refresh'); }
   };
   function server(fn) {
@@ -866,6 +866,16 @@
     return out;
   }
 
+  // 整形スタイル選択（自動/箇条書き/番号/見出し/文章）
+  function styleSelector() {
+    var cur = S.vStyle || 'auto';
+    var opts = [['auto', '自動'], ['bullet', '● 箇条書き'], ['number', '① 番号'], ['heading', '【見出し】'], ['plain', '文章']];
+    var btns = opts.map(function (o) {
+      var on = cur === o[0];
+      return '<button' + act('setVStyle', { val: o[0] }) + ' style="height:34px;padding:0 12px;border-radius:9px;cursor:pointer;font:700 12px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--muted)') + '">' + o[1] + '</button>';
+    }).join('');
+    return '<div style="margin-bottom:14px"><div style="' + miniLab + '">整形スタイル</div><div style="display:flex;flex-wrap:wrap;gap:7px">' + btns + '</div></div>';
+  }
   function renderVoice() {
     var inner;
     if (S.vProcessing) {
@@ -882,7 +892,8 @@
     return '<div' + act('closeVoice') + ' style="position:absolute;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px">' +
       '<div' + act('stop') + ' style="width:100%;max-width:520px;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">🎤</span><div style="font:900 18px \'Noto Sans JP\',sans-serif;color:var(--text)">処置を音声で入力</div></div>' +
-      '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:16px">マイクで話した内容をAIが報告書向けの文章に整えます。</div>' +
+      '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:12px">マイクで話した内容をAIが報告書向けの文章に整えます。</div>' +
+      styleSelector() +
       (S.vError ? '<div style="background:#fdecea;border:1px solid #f5c6c0;color:#b03a2e;border-radius:12px;padding:12px 14px;font:600 12.5px/1.6 \'Noto Sans JP\',sans-serif;margin-bottom:14px">' + esc(S.vError) + '</div>' : '') +
       inner +
       '<button' + act('closeVoice') + ' style="width:100%;height:44px;border:none;background:none;color:var(--muted);font:700 13px \'Noto Sans JP\',sans-serif;cursor:pointer;margin-top:12px">閉じる</button></div></div>';
@@ -1067,7 +1078,8 @@
     printPdf: function () { doPrint(); },
     openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview' }; }); patchCaseSignature(d.id); },
     // voice (mock; S6 で Gemini 実装)
-    openVoice: function () { setState({ voiceOpen: true, vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false }); },
+    setVStyle: function (d) { setState({ vStyle: d.val }); },
+    openVoice: function () { setState({ voiceOpen: true, vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false, vStyle: S.vStyle || 'auto' }); },
     closeVoice: function () { stopRec(); setState({ voiceOpen: false, vListening: false }); },
     toggleListen: function () { toggleListen(); },
     aiFormatVoice: function () {
@@ -1075,7 +1087,7 @@
       setState({ vListening: false, vProcessing: true, vResult: '' });
       // 入力が空、または Gemini 未設定ならモック整形にフォールバック
       if (!raw || !BOOT.geminiEnabled) { setTimeout(function () { setState({ vProcessing: false, vResult: mockSummarize(raw) }); }, 700); return; }
-      server('aiFormatShori', raw).then(function (text) {
+      server('aiFormatShori', raw, S.vStyle || 'auto').then(function (text) {
         setState({ vProcessing: false, vResult: text || mockSummarize(raw) });
       }).catch(function (e) {
         setState({ vProcessing: false, vResult: mockSummarize(raw) });
@@ -1231,7 +1243,7 @@
         if (!blob.size) { setState({ vProcessing: false }); return; }
         setState({ vProcessing: true, vResult: '' });
         audioBlobToWav(blob).then(function (dataUrl) {
-          return server('aiTranscribe', dataUrl, 'audio/wav');
+          return server('aiTranscribe', dataUrl, 'audio/wav', S.vStyle || 'auto');
         }).then(function (text) {
           setState({ vProcessing: false, vResult: text || '' });
         }).catch(function (e) {
