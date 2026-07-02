@@ -15,11 +15,20 @@ const app = express();
 const PORT = process.env.PORT || 5174;
 app.set('trust proxy', true); // Funnel/リバースプロキシ背後
 
-app.use(express.json({ limit: '30mb' })); // 署名dataURL・音声・PDFの受け渡しを見越して
-
-// 認証ルート(/auth/*, /api/me) と保護ミドルウェア（未設定時は素通り）
+// 認証を body parser より前に。未認証リクエストで巨大bodyをparseしない（DoS対策）。
+// /auth/* と /api/me は body 不要なのでこの順で問題ない。
 auth.install(app);
 app.use(auth.middleware());
+
+app.use(express.json({ limit: '30mb' })); // 署名dataURL・音声・PDFの受け渡しを見越して（認証後のみ）
+
+// クライアント入力からサーバー管理フィールドを除去（Drive fileId等の注入を防止）
+function sanitizeClientCase(b) {
+  if (!b || typeof b !== 'object') return {};
+  const o = Object.assign({}, b);
+  ['signatureFileId', 'pdfFileId', 'driveFolderId', 'createdAt', 'updatedAt'].forEach(k => { delete o[k]; });
+  return o;
+}
 
 // GAS 委譲に渡す案件メタ（フォルダ名/ファイル名生成に必要な最小限）
 function caseMeta(c) {
@@ -141,7 +150,7 @@ app.post('/api/master/refresh', ha(async () => {
 
 // 案件
 app.get('/api/cases/:id', h(req => store.getCase(req.params.id)));
-app.post('/api/cases', h(req => ({ id: store.saveCase(req.body) })));
+app.post('/api/cases', h(req => ({ id: store.saveCase(sanitizeClientCase(req.body)) })));
 app.post('/api/cases/:id/duplicate', h(req => ({ id: store.duplicateCase(req.params.id) })));
 app.delete('/api/cases/:id', h(req => ({ ok: store.deleteCase(req.params.id) })));
 app.post('/api/cases/:id/close', h(req => ({ ok: store.closeCase(req.params.id) })));

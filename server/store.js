@@ -32,10 +32,13 @@ function getSettings() {
   Object.keys(map).forEach(k => { if (!(k in out)) out[k] = map[k]; });
   return out;
 }
+var ALLOWED_SETTING_KEYS = { email: 1, cc: 1, subject: 1, body: 1, companyLW: 1, companyTS: 1, travelDepts: 1 };
 function saveSettings(obj) {
   if (!obj) return getSettings();
   const up = db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
-  const tx = db.transaction(o => { Object.keys(o).forEach(k => up.run(k, o[k] == null ? '' : String(o[k]))); });
+  const tx = db.transaction(o => {
+    Object.keys(o).forEach(k => { if (ALLOWED_SETTING_KEYS[k]) up.run(k, o[k] == null ? '' : String(o[k])); });
+  });
   tx(obj);
   return getSettings();
 }

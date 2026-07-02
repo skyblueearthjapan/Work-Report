@@ -12,13 +12,21 @@ function json_(o) {
 function getApiToken_() {
   return PropertiesService.getScriptProperties().getProperty('API_TOKEN') || '';
 }
+/** 定数時間比較（タイミング攻撃対策）。 */
+function safeEq_(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  var r = 0;
+  for (var i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
 
 /** VPS からの JSON POST を受ける。{action, token, params} でディスパッチ。 */
 function doPost(e) {
   try {
     var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var expected = getApiToken_();
-    if (!expected || req.token !== expected) throw new Error('unauthorized');
+    if (!expected || !safeEq_(req.token, expected)) throw new Error('unauthorized');
     var p = req.params || {};
     var out;
     switch (req.action) {

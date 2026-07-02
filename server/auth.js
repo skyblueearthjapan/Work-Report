@@ -41,14 +41,15 @@ function parseCookies(req) {
 }
 function currentUser(req) { if (!authEnabled()) return { email: '(auth disabled)', anon: true }; return verify(parseCookies(req)[COOKIE]); }
 
-function loginUrl() {
+function loginUrl(state) {
   const p = new URLSearchParams({
     client_id: CLIENT_ID, redirect_uri: redirectUri(), response_type: 'code',
-    scope: 'openid email profile', access_type: 'online', prompt: 'select_account'
+    scope: 'openid email profile', access_type: 'online', prompt: 'select_account', state: state
   });
   if (ALLOWED_DOMAIN) p.set('hd', ALLOWED_DOMAIN);
   return 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
 }
+var STATE_COOKIE = 'wl_oauth_state';
 async function exchange(code) {
   const body = new URLSearchParams({ code, client_id: CLIENT_ID, client_secret: CLIENT_SECRET, redirect_uri: redirectUri(), grant_type: 'authorization_code' });
   const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
@@ -59,18 +60,36 @@ async function exchange(code) {
 function decodeIdToken(idToken) { return JSON.parse(Buffer.from(String(idToken).split('.')[1], 'base64url').toString()); }
 
 function install(app) {
-  app.get('/auth/login', (req, res) => { if (!authEnabled()) return res.redirect('/'); res.redirect(loginUrl()); });
+  app.get('/auth/login', (req, res) => {
+    if (!authEnabled()) return res.redirect('/');
+    const state = crypto.randomBytes(16).toString('hex');
+    res.setHeader('Set-Cookie', STATE_COOKIE + '=' + state + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600');
+    res.redirect(loginUrl(state));
+  });
   app.get('/auth/callback', async (req, res) => {
     try {
       if (!authEnabled()) return res.redirect('/');
+      // CSRF: state 照合
+      const stateCookie = parseCookies(req)[STATE_COOKIE];
+      if (!req.query.state || !stateCookie || req.query.state !== stateCookie) {
+        res.setHeader('Set-Cookie', STATE_COOKIE + '=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
+        return res.status(400).send('ログインセッションが無効です。もう一度お試しください。');
+      }
       const code = req.query.code; if (!code) throw new Error('認可コードがありません');
       const tok = await exchange(code);
       const claims = decodeIdToken(tok.id_token);
       const email = String(claims.email || '').toLowerCase();
-      const ok = !ALLOWED_DOMAIN || claims.hd === ALLOWED_DOMAIN || email.endsWith('@' + ALLOWED_DOMAIN.toLowerCase());
-      if (!ok) return res.status(403).send('このアプリは ' + ALLOWED_DOMAIN + ' のアカウントのみ利用できます。');
+      // id_token の最低限の正当性検証（サーバー間でtoken endpointから取得済）
+      if (claims.aud !== CLIENT_ID) return res.status(403).send('トークンの対象が不正です。');
+      if (claims.email_verified === false) return res.status(403).send('メールアドレスが未確認のアカウントです。');
+      // ドメイン限定（fail-safe: ALLOWED_DOMAIN 未設定なら誰も許可しない）
+      const ok = !!ALLOWED_DOMAIN && (claims.hd === ALLOWED_DOMAIN || email.endsWith('@' + ALLOWED_DOMAIN.toLowerCase()));
+      if (!ok) return res.status(403).send('このアプリは ' + (ALLOWED_DOMAIN || '(未設定)') + ' のアカウントのみ利用できます。');
       const session = sign({ email, name: claims.name || '', exp: Date.now() + TTL_MS });
-      res.setHeader('Set-Cookie', COOKIE + '=' + encodeURIComponent(session) + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=' + Math.floor(TTL_MS / 1000));
+      res.setHeader('Set-Cookie', [
+        COOKIE + '=' + encodeURIComponent(session) + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=' + Math.floor(TTL_MS / 1000),
+        STATE_COOKIE + '=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0'
+      ]);
       res.redirect('/');
     } catch (e) { res.status(500).send('ログイン処理でエラー: ' + ((e && e.message) || e)); }
   });

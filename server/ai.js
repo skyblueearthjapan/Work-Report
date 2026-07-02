@@ -29,10 +29,18 @@ function dataUrlParts(dataUrl, fallbackMime) {
   if (m) return { mime: m[1], data: m[2] };
   return { mime: fallbackMime || 'application/octet-stream', data: String(dataUrl || '') };
 }
+// 入力サイズ・MIME検証（コストDoS/過大送信の防止）
+var MAX_B64 = 14 * 1024 * 1024; // 約10MBデコード相当
+function checkMedia(p, allowPrefix) {
+  if (!p.data) throw new Error('データが空です');
+  if (p.data.length > MAX_B64) throw new Error('ファイルが大きすぎます（約10MBまで）');
+  if (allowPrefix && String(p.mime || '').indexOf(allowPrefix) !== 0) throw new Error('対応していない形式です: ' + p.mime);
+}
 
 async function formatShori(textInput) {
   const input = String(textInput || '').trim();
   if (!input) throw new Error('整形するテキストが空です');
+  if (input.length > 20000) throw new Error('テキストが長すぎます');
   const prompt = 'あなたは製造設備の保守報告の校正者です。次の口述メモを、作業報告書の「処置」欄向けに、' +
     '事実のみ・敬体（です・ます調）・簡潔な文章へ整えてください。推測や誇張はせず、箇条書きにはせず自然な文章にし、整形後の本文のみを出力してください。\n\n【口述メモ】\n' + input;
   const out = await callGemini({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } });
@@ -41,7 +49,7 @@ async function formatShori(textInput) {
 
 async function transcribe(audio, mime) {
   const p = dataUrlParts(audio, mime || 'audio/webm');
-  if (!p.data) throw new Error('音声データが空です');
+  checkMedia(p, 'audio/');
   const prompt = 'この音声を日本語で文字起こしし、現場作業報告書の「処置」欄に入れる文章へ整えてください。' +
     '事実のみ・敬体・簡潔に。言い淀み・重複・不要な前置きは除去し、整形後の本文のみを出力してください。';
   const out = await callGemini({
@@ -53,7 +61,7 @@ async function transcribe(audio, mime) {
 
 async function readPlate(image) {
   const p = dataUrlParts(image, 'image/jpeg');
-  if (!p.data) throw new Error('画像データが空です');
+  checkMedia(p, 'image/');
   const prompt = 'これはアルミ銘板（ネームプレート）の写真です。機種・型式・製番・製造年月を読み取りJSONで返してください。' +
     '対応の目安：機種=MODEL/機種, 型式=TYPE/型式, 製番=No./SERIAL/製造番号, 製造年月=製造年月/DATE。製造年月は可能なら YYYY-MM。読めない項目は空文字。';
   const out = await callGemini({
