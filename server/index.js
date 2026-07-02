@@ -144,8 +144,12 @@ app.post('/api/ai/plate', ha(async req => await ai.readPlate((req.body && req.bo
 app.post('/api/master/refresh', ha(async () => {
   if (!gasConfigured()) throw new Error('GAS連携が未設定です');
   const m = await gasCall('refreshMaster');
-  store.setMaster(m);
-  return { kobans: (m.kobans || []).length, staff: (m.staff || []).length, depts: (m.depts || []).length, importedAt: m.importedAt };
+  const saved = store.setMaster(m);
+  return {
+    counts: { kobans: (m.kobans || []).length, staff: (m.staff || []).length, depts: (m.depts || []).length },
+    importedAt: m.importedAt,
+    master: saved
+  };
 }));
 
 // 案件

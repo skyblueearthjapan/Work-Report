@@ -84,7 +84,8 @@
     sendReportMail: function (id) { return _http('POST', '/api/cases/' + encodeURIComponent(id) + '/mail'); },
     aiFormatShori: function (text) { return _http('POST', '/api/ai/format', { text: text }).then(function (r) { return r.text; }); },
     aiReadPlate: function (image) { return _http('POST', '/api/ai/plate', { image: image }); },
-    aiTranscribe: function (audio, mime) { return _http('POST', '/api/ai/transcribe', { audio: audio, mime: mime }).then(function (r) { return r.text; }); }
+    aiTranscribe: function (audio, mime) { return _http('POST', '/api/ai/transcribe', { audio: audio, mime: mime }).then(function (r) { return r.text; }); },
+    refreshMaster: function () { return _http('POST', '/api/master/refresh'); }
   };
   function server(fn) {
     var args = [].slice.call(arguments, 1);
@@ -780,6 +781,12 @@
       '<div style="font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">出張部署（名簿の初期表示に使用）</div>' +
       '<div style="font:500 11.5px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">選択した部署が、スタッフ「名簿から追加」で上位に表示されます。加工班など基本行かない部署の応援も、追加時に部署を選べば呼び出せます。' + (deptToggles ? '' : '（先にマスターを取り込むと部署が表示されます）') + '</div>' +
       (deptToggles ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + deptToggles + '</div>' : '') + '</div>';
+    var mImportedAt = (MASTER && MASTER.importedAt) ? MASTER.importedAt : '未取込';
+    var mKobans = (MASTER && MASTER.kobans) ? MASTER.kobans.length : 0;
+    var masterSection = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px">' +
+      '<div style="font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">🔄 マスター取込（工番・作業員・部署）</div>' +
+      '<div style="font:500 11.5px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">元マスターの最新データを取り込みます。自動取込は毎日早朝(6時台)。更新をすぐ反映したい時は下のボタンで即時取込できます。<br>最終取込：<b style="color:var(--text)">' + esc(mImportedAt) + '</b>（工番 ' + mKobans + ' 件）</div>' +
+      '<button' + act('refreshMaster') + ' style="height:44px;padding:0 18px;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);border-radius:11px;font:700 13px \'Noto Sans JP\',sans-serif;cursor:pointer">マスターを今すぐ最新に更新</button></div>';
     return '<div style="padding:24px 22px 40px;animation:scin .28s ease both">' +
       '<div style="font:900 20px/1.3 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:20px">送信設定</div>' +
       '<div style="display:flex;flex-direction:column;gap:18px">' +
@@ -788,6 +795,7 @@
       '<div><label style="' + labStyle + '">件名（定型）</label><input class="req"' + chg('settings', { name: 'subject' }) + ' value="' + esc(st.subject) + '" style="' + inpStyle + '"></div>' +
       '<div><label style="' + labStyle + '">本文（定型文）</label><textarea' + chg('settings', { name: 'body' }) + ' style="width:100%;height:180px;border:1.5px solid var(--border);border-radius:13px;padding:14px 16px;font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(st.body) + '</textarea></div>' +
       '<div style="background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:12px;padding:14px 16px;font:500 12.5px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text)">差込キーワード： <b style="color:var(--primary)">{工番}</b> ／ <b style="color:var(--primary)">{お客様名}</b> ／ <b style="color:var(--primary)">{作業日}</b><br>送信時に各案件の情報へ自動で置き換わります。</div>' +
+      masterSection +
       travelSection +
       (BOOT.folderUrl ? '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px"><div style="font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">📁 保管フォルダ（PDF・サイン）</div><div style="font:500 12px/1.7 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">クローズ済み案件の作業報告書PDFとサイン画像が、案件ごとのフォルダに保管されます。総務部などと共有してご利用ください。</div><a href="' + esc(BOOT.folderUrl) + '" target="_blank" rel="noopener" style="display:inline-block;height:44px;line-height:44px;padding:0 18px;border:1.5px solid var(--primary);color:var(--primary);border-radius:11px;font:700 13px \'Noto Sans JP\',sans-serif;text-decoration:none">保管フォルダを開く →</a></div>' : '') + '</div>' +
       '<button' + act('saveSettings') + ' style="width:100%;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;margin-top:24px;box-shadow:0 6px 18px var(--primary-shadow)">保存する</button>' +
@@ -953,6 +961,16 @@
         else staff = staff.concat([{ id: uid('s'), name: st.name, separate: false }]);
         return Object.assign({}, o, { staff: staff });
       });
+    },
+    // マスターを今すぐ最新に取り込む（元シートの最新を反映）
+    refreshMaster: function () {
+      setBusy(true);
+      server('refreshMaster').then(function (r) {
+        if (r && r.master) MASTER = r.master;
+        setState({ busy: false });
+        var c = (r && r.counts) || {};
+        toast('マスターを最新に更新しました（工番' + (c.kobans || 0) + '・作業員' + (c.staff || 0) + '・部署' + (c.depts || 0) + '）');
+      }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
     // 設定：出張部署のトグル（保存前のローカル変更）
     toggleTravelDept: function (d) {
