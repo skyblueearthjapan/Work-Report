@@ -25,9 +25,16 @@ async function callGemini(payload) {
 }
 
 function dataUrlParts(dataUrl, fallbackMime) {
-  const m = String(dataUrl || '').match(/^data:([^;]+);base64,(.*)$/);
-  if (m) return { mime: m[1], data: m[2] };
-  return { mime: fallbackMime || 'application/octet-stream', data: String(dataUrl || '') };
+  // "data:<mime>[;params];base64,<data>" を安全に分解（mimeに ;codecs=... 等が付く場合に対応）
+  const s = String(dataUrl || '');
+  const marker = ';base64,';
+  const i = s.indexOf(marker);
+  if (s.slice(0, 5) === 'data:' && i >= 0) {
+    let mime = s.slice(5, i);
+    mime = mime.split(';')[0].trim() || (fallbackMime || 'application/octet-stream'); // パラメータ除去
+    return { mime: mime, data: s.slice(i + marker.length) };
+  }
+  return { mime: fallbackMime || 'application/octet-stream', data: s };
 }
 // 入力サイズ・MIME検証（コストDoS/過大送信の防止）
 var MAX_B64 = 14 * 1024 * 1024; // 約10MBデコード相当

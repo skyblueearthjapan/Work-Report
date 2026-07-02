@@ -1182,6 +1182,34 @@
   function stopStream() { if (_stream) { try { _stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} _stream = null; } }
   function stopRec() { if (_mediaRec && _mediaRec.state !== 'inactive') { try { _mediaRec.stop(); } catch (e) {} } _mediaRec = null; stopStream(); }
   function blobToDataUrl(blob) { return new Promise(function (res) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.readAsDataURL(blob); }); }
+  // 録音(webm/mp4等)を Gemini が確実に扱える WAV(16kHz mono) の dataURL に変換
+  function encodeWav(buf) {
+    var n = buf.length, ch = buf.numberOfChannels, rate = buf.sampleRate;
+    var mono = new Float32Array(n);
+    for (var c = 0; c < ch; c++) { var d = buf.getChannelData(c); for (var i = 0; i < n; i++) mono[i] += d[i] / ch; }
+    var ab = new ArrayBuffer(44 + n * 2), v = new DataView(ab);
+    function ws(o, s) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+    ws(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE'); ws(12, 'fmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); ws(36, 'data'); v.setUint32(40, n * 2, true);
+    var off = 44; for (var j = 0; j < n; j++) { var x = Math.max(-1, Math.min(1, mono[j])); v.setInt16(off, x < 0 ? x * 0x8000 : x * 0x7FFF, true); off += 2; }
+    return ab;
+  }
+  function audioBlobToWav(blob) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AC || !OAC) return blobToDataUrl(blob); // 非対応環境は元データ
+    var ac = new AC();
+    return blob.arrayBuffer().then(function (b) { return ac.decodeAudioData(b); }).then(function (decoded) {
+      try { ac.close(); } catch (e) {}
+      var rate = 16000, len = Math.max(1, Math.ceil(decoded.duration * rate));
+      var oac = new OAC(1, len, rate);
+      var src = oac.createBufferSource(); src.buffer = decoded; src.connect(oac.destination); src.start(0);
+      return oac.startRendering();
+    }).then(function (rendered) {
+      return blobToDataUrl(new Blob([encodeWav(rendered)], { type: 'audio/wav' }));
+    });
+  }
   function toggleListen() {
     if (S.vListening) { // 停止 → 文字起こし
       try { if (_mediaRec && _mediaRec.state !== 'inactive') _mediaRec.stop(); } catch (e) {}
@@ -1202,8 +1230,8 @@
         var blob = new Blob(_chunks, { type: (_mediaRec && _mediaRec.mimeType) || 'audio/webm' });
         if (!blob.size) { setState({ vProcessing: false }); return; }
         setState({ vProcessing: true, vResult: '' });
-        blobToDataUrl(blob).then(function (dataUrl) {
-          return server('aiTranscribe', dataUrl, blob.type);
+        audioBlobToWav(blob).then(function (dataUrl) {
+          return server('aiTranscribe', dataUrl, 'audio/wav');
         }).then(function (text) {
           setState({ vProcessing: false, vResult: text || '' });
         }).catch(function (e) {
