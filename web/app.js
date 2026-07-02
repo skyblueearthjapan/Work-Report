@@ -12,7 +12,7 @@
   var WT = ['据付', '移設', '納品', '点検', '改造', '修理', '調査'];
   var MASTER = BOOT.master || { kobans: [], staff: [], depts: [], importedAt: '' };
   // 文字数上限（PDFレイアウト崩れ防止・延々入力の抑止）
-  var LIMIT = { genin: 400, shori: 800 };
+  var LIMIT = { genin: 500, shori: 1000 };
   // 文字数カウンタ表示（live更新は下部の input リスナ）
   function taCounter(id, len, max) {
     var over = len > max;
@@ -655,6 +655,9 @@
   function viewPreview() {
     var r = findCase(S.activeId) || blankForm('LW');
     var active = S.activeId ? r : null;
+    // 本文（原因＋処理）が長いほどフォントを自動縮小してレイアウト崩れ・過度なページ増を抑える
+    var pvBodyLen = String(r.genin || '').length + String(r.shori || '').length;
+    var pvBodyFs = pvBodyLen > 900 ? '9px' : (pvBodyLen > 550 ? '10px' : '11px');
     var isLW = active && active.type === 'LW';
     var orderedStaff = r.staff || [];
     var commonNames = orderedStaff.filter(function (st) { return !st.separate; }).map(function (st, i) { return st.name || ('作業者' + (orderedStaff.indexOf(st) + 1)); }).join('・') || '（該当なし）';
@@ -722,8 +725,8 @@
       '<div style="width:96px;position:relative;display:flex;align-items:center;justify-content:center;padding:2px">' + kaninCell + '</div></div>' +
       // content
       '<div style="display:flex;border-bottom:2px solid #111;min-height:250px"><div style="width:22px;border-right:1px solid #111;display:flex;align-items:center;justify-content:center"><div style="writing-mode:vertical-rl;font:700 11px \'Noto Sans JP\',sans-serif;letter-spacing:.3em">作業内容</div></div>' +
-      '<div style="flex:1;padding:7px 9px;display:flex;flex-direction:column"><div style="flex:1"><div style="font:700 10px \'Noto Sans JP\',sans-serif;color:#333;margin-bottom:2px">（原因）</div><div style="font:500 11px/1.6 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;margin-bottom:8px;color:#16263f;word-break:break-word">' + esc(r.genin || '') + '</div>' +
-      '<div style="font:700 10px \'Noto Sans JP\',sans-serif;color:#333;margin-bottom:2px">（処理）</div><div style="font:500 11px/1.65 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;color:#16263f;word-break:break-word">' + esc(r.shori || '') + '</div></div>' +
+      '<div style="flex:1;padding:7px 9px;display:flex;flex-direction:column"><div style="flex:1"><div style="font:700 10px \'Noto Sans JP\',sans-serif;color:#333;margin-bottom:2px">（原因）</div><div style="font:500 ' + pvBodyFs + '/1.6 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;margin-bottom:8px;color:#16263f;word-break:break-word">' + esc(r.genin || '') + '</div>' +
+      '<div style="font:700 10px \'Noto Sans JP\',sans-serif;color:#333;margin-bottom:2px">（処理）</div><div style="font:500 ' + pvBodyFs + '/1.65 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;color:#16263f;word-break:break-word">' + esc(r.shori || '') + '</div></div>' +
       '<div style="align-self:flex-end;margin-top:10px;width:196px;border:1.4px solid #111;font:600 8.5px \'Noto Sans JP\',sans-serif;background:#fff;overflow:hidden"><div style="display:flex;border-bottom:1px solid #111;background:#f3f3f3"><div style="flex:1;padding:2px 5px">作業終了時の確認事項</div><div style="width:30px;text-align:center;border-left:1px solid #111;padding:2px 0">確認</div></div>' + confirmHtml + '<div style="padding:2px 5px;font-size:7.5px;color:#555">※完了は「✓」 該当なしは「－」</div></div></div></div>' +
       // work time
       '<div style="display:flex;border-bottom:1px solid #111;font:600 9.5px \'Noto Sans JP\',sans-serif"><div style="width:70px;border-right:1px solid #111;padding:4px 5px;background:#f7f7f7;display:flex;align-items:center">作業時間</div><div style="flex:1">' + workRowsHtml + '<div style="display:flex;background:#f7f7f7"><div style="flex:1;padding:3px 6px;text-align:right;font-weight:700">作業時間 合計</div><div style="width:120px;border-left:1px solid #ccc;padding:3px 8px;font-weight:700">' + fmtHM(allWorkM) + '</div></div></div></div>' +
@@ -1101,16 +1104,15 @@
         toast('AI整形に失敗したため簡易整形しました：' + errMsg(e), true);
       });
     },
+    // 処置へ「置き換え」で反映（従来の追記だと重複・肥大化の原因になるため）
     applyVoice: function () {
       var res = S.vResult;
       if (!res) { setState({ voiceOpen: false, vListening: false }); return; }
-      var c = findCase(S.activeId) || {};
-      var combined = (c.shori ? c.shori + '\n' : '') + res;
-      var truncated = combined.length > LIMIT.shori;
-      var capped = combined.slice(0, LIMIT.shori);
+      var truncated = res.length > LIMIT.shori;
+      var capped = res.slice(0, LIMIT.shori);
       mutateCase(function (o) { return Object.assign({}, o, { shori: capped }); });
       setState({ voiceOpen: false, vListening: false });
-      if (truncated) toast('処理は最大' + LIMIT.shori + '文字のため一部を省略しました', true);
+      toast(truncated ? ('処理を反映しました（最大' + LIMIT.shori + '文字のため一部省略）') : '処理に反映しました');
     },
     // plate (mock; S6 で Gemini Vision 実装)
     openPlate: function () { setState({ plateOpen: true, plateImg: '', plateProcessing: false, plateResult: null }); },
