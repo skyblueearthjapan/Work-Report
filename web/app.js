@@ -171,7 +171,7 @@
     return {
       type: type, status: '未着手', koban: '', motoKoban: '', nohinNo: '', kobanName: '',
       nohinSaki: '', okyakuSub: '', basho: '', tantou: '', tel: '', kishu: '', katashiki: '',
-      seiban: '', nenGappi: '', yoteibi: '', shijiNaiyou: '', workTypes: {}, paid: '有償',
+      seiban: '', nenGappi: '', saidaiSekisai: '', hontaiJuryo: '', yoteibi: '', shijiNaiyou: '', workTypes: {}, paid: '有償',
       genin: '', shori: '', confirmItems: defaultConfirm(type),
       staff: [{ id: 's1', name: '', separate: false }],
       commonWork: [{ date: '', start: '', end: '' }],
@@ -481,7 +481,9 @@
       '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">型式</label>' + input('katashiki', '') + '</div>' +
       '<div style="flex:1"><label style="' + labStyle + '">製番</label>' + input('seiban', '') + '</div></div>' +
       '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">銘板 年月日</label>' + input('nenGappi', '', 'month') + '</div>' +
-      (draftIsLW ? '<div style="flex:1"><label style="' + labStyle + '">納品番号</label>' + input('nohinNo', '例：D-1180') + '</div>' : '') + '</div></div>' +
+      (draftIsLW ? '<div style="flex:1"><label style="' + labStyle + '">納品番号</label>' + input('nohinNo', '例：D-1180') + '</div>' : '') + '</div>' +
+      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">最大積載重量</label>' + input('saidaiSekisai', '例：5000kg') + '</div>' +
+      '<div style="flex:1"><label style="' + labStyle + '">本体重量</label>' + input('hontaiJuryo', '例：11500kg') + '</div></div></div>' +
       // 作業内容(事前)
       '<div style="' + secLabel + '">作業内容（事前登録）</div><div style="' + cardStyle + '">' +
       '<div><div style="' + miniLab + '">作業種別（該当を選択・複数可）</div><div style="display:flex;flex-wrap:wrap;gap:9px">' + wtButtons('new', nf) + '</div></div>' +
@@ -537,7 +539,7 @@
     var plate = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="' + secTitle + ';margin-bottom:0">銘板情報</div><button' + act('openPlate') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">📷 銘板を撮影</button></div>' +
       '<div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">設備の銘板を撮影すると、AIが各項目を自動で読み取ります。</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-      ['機種:kishu', '型式:katashiki', '製番:seiban', '製造年月:nenGappi'].map(function (pair) { var kv = pair.split(':'); return '<div><div style="' + miniLab + '">' + kv[0] + '</div><div style="font:700 14px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(r[kv[1]] || '—') + '</div></div>'; }).join('') + '</div></div>';
+      ['機種:kishu', '型式:katashiki', '製番:seiban', '製造年月:nenGappi', '最大積載重量:saidaiSekisai', '本体重量:hontaiJuryo'].map(function (pair) { var kv = pair.split(':'); return '<div><div style="' + miniLab + '">' + kv[0] + '</div><div style="font:700 14px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(r[kv[1]] || '—') + '</div></div>'; }).join('') + '</div></div>';
 
     var confirm = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font:700 14px \'Noto Sans JP\',sans-serif;color:var(--text)">作業終了時の確認事項</div><div style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted)">完了「✓」 該当なし「−」</div></div>' +
       '<div style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:8px">作業の最後に上記の確認を行ってください。</div>' +
@@ -748,7 +750,7 @@
       '<div style="display:flex;align-items:flex-end"><span style="font:700 9px \'Noto Sans JP\',sans-serif;color:#444;white-space:nowrap">御担当者名</span><span style="flex:1;border-bottom:1px solid #999;margin-left:6px;height:38px;position:relative">' + sig + '</span></div></div></div>' +
       // customer/plate
       '<div style="display:flex;border-bottom:2px solid #111;font:600 9px \'Noto Sans JP\',sans-serif"><div style="flex:1;border-right:1px solid #111;padding:6px 8px"><div style="font:700 9px \'Noto Sans JP\',sans-serif;margin-bottom:3px">お客様情報</div><div style="color:#333;line-height:1.7">納品先：' + esc(r.nohinSaki || '—') + '<br>住所：' + esc(r.basho || '—') + '<br>ＴＥＬ：' + esc(r.tel || '—') + '　担当者：' + esc(r.tantou || '—') + '</div></div>' +
-      '<div style="width:240px;padding:6px 8px"><div style="font:700 9px \'Noto Sans JP\',sans-serif;margin-bottom:3px">銘板情報</div><div style="color:#333;line-height:1.7">型式；' + esc(r.katashiki || '—') + '<br>製番；' + esc(r.seiban || '—') + '<br>年月日；' + esc(r.nenGappi || '—') + '</div></div></div>' +
+      '<div style="width:240px;padding:6px 8px"><div style="font:700 9px \'Noto Sans JP\',sans-serif;margin-bottom:3px">銘板情報</div><div style="color:#333;line-height:1.7">型式；' + esc(r.katashiki || '—') + '<br>製番；' + esc(r.seiban || '—') + '<br>年月日；' + esc(r.nenGappi || '—') + '<br>最大積載重量；' + esc(r.saidaiSekisai || '—') + '<br>本体重量；' + esc(r.hontaiJuryo || '—') + '</div></div></div>' +
       // footer
       '<div style="display:flex;align-items:center;padding:8px 10px;gap:12px">' + logo + '<div style="font:600 8.5px/1.6 \'Noto Sans JP\',sans-serif;color:#222"><div style="font-weight:700;font-size:10px">' + esc(footerCompany) + '</div>〒262-0012　千葉県千葉市花見川区千種町53<br>Tel 043-250-0165 ／ Fax 043-257-9488</div></div>' +
       '</div></div>';
@@ -930,7 +932,7 @@
       if (S.plateResult) {
         var pr = S.plateResult;
         actionArea = '<div style="background:var(--primary-soft);border:1.5px solid var(--primary);border-radius:14px;padding:14px;margin-bottom:14px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-bottom:10px">✨ 読み取り結果</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          [['機種', pr.kishu], ['型式', pr.katashiki], ['製番', pr.seiban], ['製造年月', pr.nenGappi]].map(function (kv) { return '<div><div style="' + miniLab + '">' + kv[0] + '</div><div style="font:700 15px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(kv[1] || '—') + '</div></div>'; }).join('') + '</div></div>' +
+          [['機種', pr.kishu], ['型式', pr.katashiki], ['製番', pr.seiban], ['製造年月', pr.nenGappi], ['最大積載重量', pr.saidaiSekisai], ['本体重量', pr.hontaiJuryo]].map(function (kv) { return '<div><div style="' + miniLab + '">' + kv[0] + '</div><div style="font:700 15px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(kv[1] || '—') + '</div></div>'; }).join('') + '</div></div>' +
           '<div style="display:flex;gap:10px"><label style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center">撮り直す<input type="file" accept="image/*" capture="environment"' + chg('plateFile') + ' style="display:none"></label><button' + act('applyPlate') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">各項目に反映する</button></div>';
       } else {
         actionArea = '<div style="display:flex;gap:10px"><label style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center">選び直す<input type="file" accept="image/*" capture="environment"' + chg('plateFile') + ' style="display:none"></label><button' + act('aiReadPlate') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">✨ AIで読み取る</button></div>';
@@ -940,7 +942,7 @@
     return '<div' + act('closePlate') + ' style="position:absolute;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px">' +
       '<div' + act('stop') + ' style="width:100%;max-width:520px;max-height:calc(100% - 48px);overflow-y:auto;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">📷</span><div style="font:900 18px \'Noto Sans JP\',sans-serif;color:var(--text)">銘板を撮影して自動入力</div></div>' +
-      '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:16px">アルミ銘板を撮影すると、AIが機種・型式・製番・製造年月を読み取ります。</div>' +
+      '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:16px">アルミ銘板を撮影すると、AIが機種・型式・製番・製造年月・最大積載重量・本体重量を読み取ります。</div>' +
       inner +
       '<button' + act('closePlate') + ' style="width:100%;height:44px;border:none;background:none;color:var(--muted);font:700 13px \'Noto Sans JP\',sans-serif;cursor:pointer;margin-top:12px">閉じる</button></div></div>';
   }
@@ -1130,7 +1132,7 @@
     aiReadPlate: function () {
       if (!S.plateImg) return;
       setState({ plateProcessing: true, plateResult: null });
-      var mockPlate = function () { var c = findCase(S.activeId) || {}; return { kishu: c.kishu || 'LN-3000', katashiki: c.katashiki || 'CT-3000', seiban: c.seiban || '25-0083', nenGappi: c.nenGappi || '2025-03' }; };
+      var mockPlate = function () { var c = findCase(S.activeId) || {}; return { kishu: c.kishu || 'LN-3000', katashiki: c.katashiki || 'CT-3000', seiban: c.seiban || '25-0083', nenGappi: c.nenGappi || '2025-03', saidaiSekisai: c.saidaiSekisai || '5000kg', hontaiJuryo: c.hontaiJuryo || '11500kg' }; };
       if (!BOOT.geminiEnabled) { setTimeout(function () { setState({ plateProcessing: false, plateResult: mockPlate() }); }, 900); return; }
       downscaleDataUrl(S.plateImg, 1600).then(function (small) {
         return server('aiReadPlate', small);
@@ -1141,7 +1143,7 @@
         toast('銘板のAI読み取りに失敗したため暫定値を表示しました：' + errMsg(e), true);
       });
     },
-    applyPlate: function () { var res = S.plateResult, id = S.activeId; if (res && id) { setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { kishu: res.kishu, katashiki: res.katashiki, seiban: res.seiban, nenGappi: res.nenGappi }) : c; }), plateOpen: false }; }); } else ACTIONS.closePlate(); }
+    applyPlate: function () { var res = S.plateResult, id = S.activeId; if (res && id) { setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { kishu: res.kishu, katashiki: res.katashiki, seiban: res.seiban, nenGappi: res.nenGappi, saidaiSekisai: res.saidaiSekisai, hontaiJuryo: res.hontaiJuryo }) : c; }), plateOpen: false }; }); } else ACTIONS.closePlate(); }
   };
 
   function wrapKey(k, v) { var o = {}; o[k] = v; return o; }

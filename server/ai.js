@@ -3,7 +3,7 @@
  * Gemini 連携（VPSから直接 UrlFetch）。
  *  - transcribe(audio)  : 録音音声 → 文字起こし＋「処置」欄向け整形（アプリ内マイク録音の本命）
  *  - formatShori(text)  : 口述/手入力テキスト → 整形
- *  - readPlate(image)   : 銘板写真 → {kishu,katashiki,seiban,nenGappi}（JSON強制）
+ *  - readPlate(image)   : 銘板写真 → {kishu,katashiki,seiban,nenGappi,saidaiSekisai,hontaiJuryo}（JSON強制）
  * キーは環境変数 GEMINI_API_KEY、モデルは GEMINI_MODEL（既定 gemini-2.5-flash）。
  */
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -101,8 +101,9 @@ async function transcribe(audio, mime, style) {
 async function readPlate(image) {
   const p = dataUrlParts(image, 'image/jpeg');
   checkMedia(p, 'image/');
-  const prompt = 'これはアルミ銘板（ネームプレート）の写真です。機種・型式・製番・製造年月を読み取りJSONで返してください。' +
-    '対応の目安：機種=MODEL/機種, 型式=TYPE/型式, 製番=No./SERIAL/製造番号, 製造年月=製造年月/DATE。製造年月は可能なら YYYY-MM。読めない項目は空文字。';
+  const prompt = 'これはアルミ銘板（ネームプレート）の写真です。打刻・刻印で低コントラストの場合があります。機種・型式・製番・製造年月・最大積載重量・本体重量を読み取りJSONで返してください。' +
+    '対応の目安：機種=MODEL/機種（例：Positioner）, 型式=TYPE/形式/型式, 製番=No./SERIAL/製造番号, 製造年月=製造年月/DATE, 最大積載重量=最大積載重量/積載/LOAD, 本体重量=本体重量/自重/WEIGHT。' +
+    '製造年月は可能なら YYYY-MM。重量は数値＋単位をそのまま（例「5000kg」）。読めない項目は空文字。';
   const out = await callGemini({
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: p.mime, data: p.data } }] }],
     generationConfig: {
@@ -110,13 +111,13 @@ async function readPlate(image) {
       response_mime_type: 'application/json',
       response_schema: {
         type: 'OBJECT',
-        properties: { kishu: { type: 'STRING' }, katashiki: { type: 'STRING' }, seiban: { type: 'STRING' }, nenGappi: { type: 'STRING' } },
-        required: ['kishu', 'katashiki', 'seiban', 'nenGappi']
+        properties: { kishu: { type: 'STRING' }, katashiki: { type: 'STRING' }, seiban: { type: 'STRING' }, nenGappi: { type: 'STRING' }, saidaiSekisai: { type: 'STRING' }, hontaiJuryo: { type: 'STRING' } },
+        required: ['kishu', 'katashiki', 'seiban', 'nenGappi', 'saidaiSekisai', 'hontaiJuryo']
       }
     }
   });
   let obj; try { obj = JSON.parse(out); } catch (e) { throw new Error('銘板の解析結果を解釈できませんでした'); }
-  return { kishu: String(obj.kishu || ''), katashiki: String(obj.katashiki || ''), seiban: String(obj.seiban || ''), nenGappi: String(obj.nenGappi || '') };
+  return { kishu: String(obj.kishu || ''), katashiki: String(obj.katashiki || ''), seiban: String(obj.seiban || ''), nenGappi: String(obj.nenGappi || ''), saidaiSekisai: String(obj.saidaiSekisai || ''), hontaiJuryo: String(obj.hontaiJuryo || '') };
 }
 
 module.exports = { enabled, formatShori, transcribe, readPlate };
