@@ -211,7 +211,7 @@
   var FONT = "'Noto Sans JP',system-ui,sans-serif";
   var labStyle = "display:block;font:700 12.5px 'Noto Sans JP',sans-serif;color:var(--text);margin-bottom:7px";
   var inpStyle = "width:100%;height:52px;border:1.5px solid var(--border);border-radius:13px;padding:0 15px;font:600 15px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface)";
-  var inpSm = "height:48px;border:1.5px solid var(--border);border-radius:12px;padding:0 13px;font:600 14.5px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface)";
+  var inpSm = "width:100%;height:48px;border:1.5px solid var(--border);border-radius:12px;padding:0 13px;font:600 14.5px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface)";
   var taSm = "width:100%;height:84px;border:1.5px solid var(--border);border-radius:12px;padding:11px 14px;font:500 14.5px/1.6 'Noto Sans JP',sans-serif;color:var(--text);resize:none;background:var(--surface)";
   var taMd = "width:100%;height:130px;border:1.5px solid var(--border);border-radius:12px;padding:11px 14px;font:500 14.5px/1.7 'Noto Sans JP',sans-serif;color:var(--text);resize:none;background:var(--surface)";
   var secTitle = "font:700 14px 'Noto Sans JP',sans-serif;color:var(--text);margin-bottom:12px";
@@ -306,7 +306,8 @@
     var modals = renderModals();
 
     var frame = '<div style="' + bezelStyle + '"><div style="' + frameStyle + '">' + header +
-      '<div class="scr" style="flex:1;overflow-y:auto;position:relative">' + body + '</div>' +
+      // overflow-y:auto を指定すると overflow-x が auto に格上げされ横スクロールが出るため明示的に塞ぐ
+      '<div class="scr" style="flex:1;overflow-y:auto;overflow-x:hidden;position:relative">' + body + '</div>' +
       modals + '</div></div>';
 
     var overlays = '';

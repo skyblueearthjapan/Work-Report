@@ -1,6 +1,8 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
   input,textarea,button,select{font-family:inherit}
+  /* flex内で入力欄が既定の固有幅(約180px)より縮まず横あふれするのを防ぐ（スマホ対策） */
+  input,textarea,select{min-width:0;max-width:100%}
   input:focus,textarea:focus{outline:none}
   input.req:invalid,textarea.req:invalid{border-color:#d92d20 !important}
   ::-webkit-scrollbar{width:10px;height:10px}
