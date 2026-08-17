@@ -674,27 +674,19 @@
     var orderedStaff = r.staff || [];
     var commonNames = orderedStaff.filter(function (st) { return !st.separate; }).map(function (st, i) { return st.name || ('作業者' + (orderedStaff.indexOf(st) + 1)); }).join('・') || '（該当なし）';
 
-    // day totals
-    var dayMap = {};
-    var addDay = function (d, kind, mins) { if (!d || !mins) return; if (!dayMap[d]) dayMap[d] = { work: 0, travel: 0 }; dayMap[d][kind] += mins; };
-    (r.commonWork || []).forEach(function (e) { addDay(e.date, 'work', diffM(e.start, e.end)); });
-    (r.commonTravel || []).forEach(function (e) { addDay(e.date, 'travel', diffM(e.start, e.end)); });
-    orderedStaff.forEach(function (st) { if (st.separate) { (st.work || []).forEach(function (e) { addDay(e.date, 'work', diffM(e.start, e.end)); }); (st.travel || []).forEach(function (e) { addDay(e.date, 'travel', diffM(e.start, e.end)); }); } });
-    var dayTot = function (d) { return dayMap[d] ? fmtHM(dayMap[d].work + dayMap[d].travel) : ''; };
-
     var allWorkM = sumWork(r.commonWork), allTravelM = sumWork(r.commonTravel);
     orderedStaff.forEach(function (st) { if (st.separate) { allWorkM += sumWork(st.work); allTravelM += sumWork(st.travel); } });
 
     var sepStaff = orderedStaff.filter(function (st) { return st.separate; });
     var pvWork = [];
-    (r.commonWork || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: commonNames, date: fmtDate(e.date), range: (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ') : '　', dayTotal: dayTot(e.date) }); });
-    sepStaff.forEach(function (st) { (st.work || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: st.name || '—', date: fmtDate(e.date), range: (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ') : '　', dayTotal: dayTot(e.date) }); }); });
+    (r.commonWork || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: commonNames, date: fmtDate(e.date), range: (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ') : '　' }); });
+    sepStaff.forEach(function (st) { (st.work || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: st.name || '—', date: fmtDate(e.date), range: (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ') : '　' }); }); });
     var trvRange = function (e) { var pre = (e.dir ? (e.dir + ' ') : '') + (e.date ? (fmtDate(e.date) + '　') : ''); var t = (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　')) : ''; return (pre + t).trim() || '　'; };
     var pvTravel = [];
-    (r.commonTravel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: commonNames, range: trvRange(e), km: e.km ? (e.km + ' Km') : '　', dayTotal: dayTot(e.date) }); });
-    sepStaff.forEach(function (st) { (st.travel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: st.name || '—', range: trvRange(e), km: e.km ? (e.km + ' Km') : '　', dayTotal: dayTot(e.date) }); }); });
-    if (!pvWork.length) pvWork = [{ names: '　', date: '　', range: '　', dayTotal: '' }];
-    if (!pvTravel.length) pvTravel = [{ names: '　', range: '　', km: '　', dayTotal: '' }];
+    (r.commonTravel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: commonNames, range: trvRange(e), km: e.km ? (e.km + ' Km') : '　' }); });
+    sepStaff.forEach(function (st) { (st.travel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: st.name || '—', range: trvRange(e), km: e.km ? (e.km + ' Km') : '　' }); }); });
+    if (!pvWork.length) pvWork = [{ names: '　', date: '　', range: '　' }];
+    if (!pvTravel.length) pvTravel = [{ names: '　', range: '　', km: '　' }];
 
     var firstDate = ''; (r.commonWork || []).forEach(function (e) { if (e.date && !firstDate) firstDate = e.date; });
     var kanin = r.kanin || {}; var kStamped = !!kanin.stamped;
@@ -710,8 +702,8 @@
 
     var sig = r.signature ? '<img src="' + esc(r.signature) + '" alt="" style="position:absolute;left:0;bottom:1px;height:38px;width:auto;max-width:100%">' : '';
 
-    var workRowsHtml = pvWork.map(function (w) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(w.names) + '</div><div style="width:84px;border-right:1px solid #e2e2e2;padding:3px 6px">' + esc(w.date) + '</div><div style="flex:1;padding:3px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:6px"><span>' + esc(w.range) + '</span><span style="font-size:8px;color:#1c7a45;font-weight:700;white-space:nowrap">' + (w.dayTotal ? '計 ' + esc(w.dayTotal) : '') + '</span></div></div>'; }).join('');
-    var travelRowsHtml = pvTravel.map(function (t) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(t.names) + '</div><div style="flex:1;border-right:1px solid #e2e2e2;padding:3px 8px;display:flex;justify-content:space-between;align-items:baseline;gap:6px"><span>' + esc(t.range) + '</span><span style="font-size:8px;color:#1c7a45;font-weight:700;white-space:nowrap">' + (t.dayTotal ? '計 ' + esc(t.dayTotal) : '') + '</span></div><div style="width:84px;padding:3px 8px">' + esc(t.km) + '</div></div>'; }).join('');
+    var workRowsHtml = pvWork.map(function (w) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(w.names) + '</div><div style="width:84px;border-right:1px solid #e2e2e2;padding:3px 6px">' + esc(w.date) + '</div><div style="flex:1;padding:3px 8px">' + esc(w.range) + '</div></div>'; }).join('');
+    var travelRowsHtml = pvTravel.map(function (t) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(t.names) + '</div><div style="flex:1;border-right:1px solid #e2e2e2;padding:3px 8px">' + esc(t.range) + '</div><div style="width:84px;padding:3px 8px">' + esc(t.km) + '</div></div>'; }).join('');
     var confirmHtml = (r.confirmItems || []).map(function (it) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="flex:1;padding:3px 5px;border-right:1px solid #ccc">' + esc(it.label) + '</div><div style="width:30px;text-align:center;padding:3px 0;font-weight:700">' + esc(it.value || '') + '</div></div>'; }).join('');
 
     var kaninCell = '<span style="position:absolute;top:2px;left:4px;font:700 7px \'Noto Sans JP\',sans-serif;color:#555">' + (r.type === 'LW' ? '製造' : 'TSC') + '</span>' +
@@ -744,6 +736,8 @@
       '<div style="display:flex;border-bottom:1px solid #111;font:600 9.5px \'Noto Sans JP\',sans-serif"><div style="width:70px;border-right:1px solid #111;padding:4px 5px;background:#f7f7f7;display:flex;align-items:center">作業時間</div><div style="flex:1">' + workRowsHtml + '<div style="display:flex;background:#f7f7f7"><div style="flex:1;padding:3px 6px;text-align:right;font-weight:700">作業時間 合計</div><div style="width:120px;border-left:1px solid #ccc;padding:3px 8px;font-weight:700">' + fmtHM(allWorkM) + '</div></div></div></div>' +
       // travel time
       '<div style="display:flex;border-bottom:2px solid #111;font:600 9.5px \'Noto Sans JP\',sans-serif"><div style="width:70px;border-right:1px solid #111;padding:4px 5px;background:#f7f7f7;display:flex;align-items:center">移動時間</div><div style="flex:1">' + travelRowsHtml + '<div style="display:flex;background:#f7f7f7"><div style="flex:1;padding:3px 6px;text-align:right;font-weight:700">移動時間 合計</div><div style="width:120px;border-left:1px solid #ccc;padding:3px 8px;font-weight:700">' + fmtHM(allTravelM) + '</div></div></div></div>' +
+      // 総時間（作業＋移動）。日別の「計」バッジを廃し、総計を1行にまとめて右寄せ表示。
+      '<div style="border-bottom:2px solid #111;background:#f7f7f7;padding:4px 10px;text-align:right;font:700 10px \'Noto Sans JP\',sans-serif">総時間：' + fmtHM(allWorkM + allTravelM) + '</div>' +
       // approve
       '<div style="display:flex;border-bottom:2px solid #111;min-height:74px"><div style="flex:1;border-right:1px solid #111;padding:7px 9px"><div style="font:600 9px \'Noto Sans JP\',sans-serif;color:#333;margin-bottom:6px">上記作業が終了したことを承認します。</div><div style="font:700 10px \'Noto Sans JP\',sans-serif">' + esc(recipient) + '　殿</div></div>' +
       '<div style="width:240px;padding:8px 10px"><div style="display:flex;align-items:flex-end;margin-bottom:8px"><span style="font:700 9px \'Noto Sans JP\',sans-serif;color:#444;white-space:nowrap">御社名</span><span style="flex:1;border-bottom:1px solid #999;margin-left:6px;font:700 11px \'Noto Sans JP\',sans-serif;padding-bottom:2px">' + esc(r.oshaName || '　') + '</span></div>' +
