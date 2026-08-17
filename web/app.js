@@ -765,10 +765,13 @@
     if (active && active.archived) {
       footer = '<div style="position:sticky;bottom:0;padding:14px 20px 16px;background:linear-gradient(transparent,#dfe2e8 40%);display:flex;gap:9px;z-index:5"><button' + act('goBack') + ' style="flex:none;width:130px;height:54px;border:1.5px solid #b9bfca;background:#fff;color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">戻る</button><button' + act('printPdf') + ' style="flex:1;height:54px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">印刷・PDF保存</button></div>';
     } else {
-      var stampedBtns = kStamped ? '<div style="display:flex;gap:9px"><button' + act('printPdf') + ' style="flex:1;height:54px;border:1.5px solid var(--primary);background:#fff;color:var(--primary);border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">印刷・PDF保存</button><button' + act('confirmClose') + ' style="flex:1;height:54px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">クローズ（完了）</button></div>'
+      // 印刷・PDF保存は押印前でも可能（現場でお客様控えを出すため）。クローズのみ押印を要件とする。
+      var printBtn = '<button' + act('printPdf') + ' style="flex:1;height:54px;border:1.5px solid var(--primary);background:#fff;color:var(--primary);border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">印刷・PDF保存</button>';
+      var stampedBtns = kStamped ? '<div style="display:flex;gap:9px">' + printBtn + '<button' + act('confirmClose') + ' style="flex:1;height:54px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">クローズ（完了）</button></div>'
         // 「クローズ（完了）」は確認モーダル(印刷/メール導線つき)を開く。プロトの直接クローズより安全側に倒し、handover の「保存・印刷・送信のうえクローズ」を担保。
         :
-        '<button' + act('toggleStamp', { scope: 'case' }) + ' style="width:100%;height:54px;border:1.5px solid #c0392b;background:#fff;color:#c0392b;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">🟥 ' + (r.type === 'LW' ? '製造部 管理者' : 'TSC 管理者') + 'として確認印を押す</button><div style="text-align:center;font:600 11.5px/1.5 \'Noto Sans JP\',sans-serif;color:#5a6373;padding:2px 0 0">PDFの内容を確認し、責任者が押印すると印刷・PDF保存／クローズができます。</div>';
+        '<div style="display:flex;gap:9px">' + printBtn + '</div>' +
+        '<button' + act('toggleStamp', { scope: 'case' }) + ' style="width:100%;height:54px;border:1.5px solid #c0392b;background:#fff;color:#c0392b;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">🟥 ' + (r.type === 'LW' ? '製造部 管理者' : 'TSC 管理者') + 'として確認印を押す</button><div style="text-align:center;font:600 11.5px/1.5 \'Noto Sans JP\',sans-serif;color:#5a6373;padding:2px 0 0">印刷・PDF保存は押印前でも可能です（確認印欄は空欄で出力）。責任者が押印するとクローズができます。</div>';
       footer = '<div style="position:sticky;bottom:0;padding:14px 20px 16px;background:linear-gradient(transparent,#dfe2e8 40%);display:flex;flex-direction:column;gap:9px;z-index:5">' +
         '<div style="display:flex;gap:9px"><button' + act('goBack') + ' style="flex:none;width:130px;height:54px;border:1.5px solid #b9bfca;background:#fff;color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">編集に戻る</button><button' + act('goSign') + ' style="flex:1;height:54px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">サインをする →</button></div>' + stampedBtns + '</div>';
     }
@@ -1316,10 +1319,25 @@
     if (!w) { window.print(); return; }
     var head = '<!DOCTYPE html><html><head><meta charset="utf-8"><base href="' + location.href + '"><title>' + esc(title) + '</title>' +
       '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">' +
-      '<style>@page{size:A4;margin:11mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:#fff}#sheet{width:600px;margin:0 auto;font-family:\'Noto Sans JP\',sans-serif;color:#111}</style></head><body>';
-    w.document.write(head + '<div id="sheet">' + el.innerHTML + '</div></body></html>');
+      '<style>@page{size:A4;margin:11mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0;background:#fff}#fitwrap{width:600px;margin:0 auto;transform-origin:top center}#sheet{width:600px;font-family:\'Noto Sans JP\',sans-serif;color:#111}</style></head><body>';
+    w.document.write(head + '<div id="fitwrap"><div id="sheet">' + el.innerHTML + '</div></div></body></html>');
     w.document.close();
-    var go = function () { try { w.focus(); w.print(); } catch (e) {} };
+    // A4 1枚に必ず収める。はみ出す分だけ縮小し、拡大はしない（通常案件の見た目は従来どおり）。
+    var fitOnePage = function () {
+      try {
+        var wrap = w.document.getElementById('fitwrap');
+        var sh = w.document.getElementById('sheet');
+        if (!wrap || !sh) return;
+        var availH = (297 - 11 * 2) * (96 / 25.4); // A4高さ − 上下余白(@page margin) → CSS px
+        var h = sh.getBoundingClientRect().height;
+        if (!h || h <= availH) return;
+        var s = availH / h;
+        wrap.style.transform = 'scale(' + s + ')';
+        wrap.style.height = (h * s) + 'px'; // 変換後の実寸に合わせ、空の2ページ目が出るのを防ぐ
+        wrap.style.overflow = 'hidden';
+      } catch (e) {}
+    };
+    var go = function () { fitOnePage(); try { w.focus(); w.print(); } catch (e) {} };
     if (w.document.fonts && w.document.fonts.ready) { w.document.fonts.ready.then(function () { setTimeout(go, 250); }); } else { setTimeout(go, 700); }
   }
 
