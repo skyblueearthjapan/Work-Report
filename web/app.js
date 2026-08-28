@@ -13,7 +13,7 @@
   var MASTER = BOOT.master || { kobans: [], staff: [], depts: [], importedAt: '' };
   // 文字数上限（PDFレイアウト崩れ防止・延々入力の抑止）
   // ボリューム上限（改行も加算＝空行の連発でPDFが伸びるのを抑止）
-  var LIMIT = { genin: 300, shori: 600 };
+  var LIMIT = { genin: 300, shori: 500 };
   var NL_WEIGHT = 20; // 改行1つ ≒ 20文字分（1行分の高さに相当）
   function volume(s) { var str = String(s || ''); var nl = (str.match(/\n/g) || []).length; return str.length + nl * NL_WEIGHT; }
   // volume(prefix) <= max となる最長prefixを返す（超過分を末尾から切り詰め）
@@ -64,7 +64,7 @@
   var S = {
     screen: 'home', history: [], filter: 'all', activeId: null,
     draftType: 'LW', sent: false, settingsSaved: false, nfError: false, menuId: null, editId: null,
-    voiceOpen: false, vListening: false, vRaw: '', vInterim: '', vProcessing: false, vResult: '', vError: '',
+    voiceOpen: false, vTarget: 'shori', vListening: false, vRaw: '', vInterim: '', vProcessing: false, vResult: '', vError: '',
     plateOpen: false, plateImg: '', plateProcessing: false, plateResult: null,
     histQuery: '', histType: 'all', closingId: null,
     historyList: [], historyLoading: false,
@@ -489,8 +489,7 @@
       '<div style="' + secLabel + '">作業内容（事前登録）</div><div style="' + cardStyle + '">' +
       '<div><div style="' + miniLab + '">作業種別（該当を選択・複数可）</div><div style="display:flex;flex-wrap:wrap;gap:9px">' + wtButtons('new', nf) + '</div></div>' +
       '<div style="display:flex;gap:18px;flex-wrap:wrap"><div><div style="' + miniLab + '">区分</div><div style="display:flex;gap:8px">' + paidButtons('new', nf.paid) + '</div></div></div>' +
-      '<div><textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-nf-genin"' + chg('nf', { name: 'genin' }) + ' placeholder="不具合の原因・現状（事前にわかる範囲で）" style="' + taSm + '">' + f('genin') + '</textarea>' + taCounter('cnt-nf-genin', nf.genin, LIMIT.genin) + '</div>' +
-      '<div><textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-nf-shori"' + chg('nf', { name: 'shori' }) + ' placeholder="予定している処理・作業指示" style="' + taMd + '">' + f('shori') + '</textarea>' + taCounter('cnt-nf-shori', nf.shori, LIMIT.shori) + '</div>' +
+      '<div><div style="font:800 13px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-bottom:7px">【作業内容】<span style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-left:8px">管理者が記入（作業者はこの内容をもとに実施）</span></div><textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-nf-genin"' + chg('nf', { name: 'genin' }) + ' placeholder="実施する作業の内容・指示（事前にわかる範囲で）" style="' + taSm + '">' + f('genin') + '</textarea>' + taCounter('cnt-nf-genin', nf.genin, LIMIT.genin) + '</div>' +
       '<div><div style="' + miniLab + '">作業終了時の確認事項</div><div style="display:flex;flex-direction:column">' + confirmButtons('new', nf) + '</div></div></div>' +
       (S.nfError ? '<div style="margin-top:14px;background:#fdecea;border:1px solid #f5c6c0;color:#b03a2e;border-radius:12px;padding:12px 16px;font:600 13px \'Noto Sans JP\',sans-serif">工番№・お客様名は必須項目です。</div>' : '') +
       '</div>';
@@ -532,10 +531,15 @@
       '<div style="display:flex;flex-direction:column;gap:10px">' + staffRows('case', r) + '</div>' +
       '<button' + act('addStaffCase') + ' style="' + addBtn + '">＋ スタッフを追加</button>' + staffPicker('case') + '</div>';
 
+    var voiceBtn = function (target) { return '<button' + act('openVoice', { target: target }) + ' style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12px \'Noto Sans JP\',sans-serif;cursor:pointer;flex:none">🎤 音声で入力</button>'; };
+    var secRow = function (label, note, target, mt) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:' + (mt || 0) + 'px 0 7px"><div><span style="font:800 13.5px \'Noto Sans JP\',sans-serif;color:var(--primary)">' + label + '</span><span style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-left:8px">' + note + '</span></div>' + voiceBtn(target) + '</div>'; };
     var content = '<div style="' + cardStyle + '"><div style="' + secTitle + '">作業内容</div>' +
-      '<textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-genin"' + chg('report', { name: 'genin' }) + ' placeholder="不具合の原因・現状" style="' + taSm + '">' + rv('genin') + '</textarea>' + taCounter('cnt-genin', r.genin, LIMIT.genin) +
-      '<div style="display:flex;align-items:center;justify-content:flex-end;margin:12px 0 7px"><button' + act('openVoice') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">🎤 音声で入力</button></div>' +
-      '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-shori"' + chg('report', { name: 'shori' }) + ' placeholder="実施した処理・作業の結果（音声入力も可）" style="' + taMd + '">' + rv('shori') + '</textarea>' + taCounter('cnt-shori', r.shori, LIMIT.shori) + '</div>';
+      // 上：【作業内容】＝管理者が記入
+      secRow('【作業内容】', '管理者が記入', 'genin', 0) +
+      '<textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-genin"' + chg('report', { name: 'genin' }) + ' placeholder="実施する作業の内容・指示（管理者）" style="' + taSm + '">' + rv('genin') + '</textarea>' + taCounter('cnt-genin', r.genin, LIMIT.genin) +
+      // 下：【実施内容】＝作業者が記入
+      secRow('【実施内容】', '作業者が記入', 'shori', 14) +
+      '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-shori"' + chg('report', { name: 'shori' }) + ' placeholder="実際に行った作業・結果（作業者。音声入力も可）" style="' + taMd + '">' + rv('shori') + '</textarea>' + taCounter('cnt-shori', r.shori, LIMIT.shori) + '</div>';
 
     var plate = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="' + secTitle + ';margin-bottom:0">銘板情報</div><button' + act('openPlate') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">📷 銘板を撮影</button></div>' +
       '<div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">設備の銘板を撮影すると、AIが各項目を自動で読み取ります。</div>' +
@@ -730,7 +734,10 @@
       '<div style="width:96px;position:relative;display:flex;align-items:center;justify-content:center;padding:2px">' + kaninCell + '</div></div>' +
       // content
       '<div style="display:flex;border-bottom:2px solid #111;min-height:250px"><div style="width:22px;border-right:1px solid #111;display:flex;align-items:center;justify-content:center"><div style="writing-mode:vertical-rl;font:700 11px \'Noto Sans JP\',sans-serif;letter-spacing:.3em">作業内容</div></div>' +
-      '<div style="flex:1;padding:7px 9px;display:flex;flex-direction:column"><div style="flex:1"><div style="font:500 ' + pvBodyFs + '/1.6 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;margin-bottom:8px;color:#16263f;word-break:break-word">' + esc(r.genin || '') + '</div>' +
+      '<div style="flex:1;padding:7px 9px;display:flex;flex-direction:column"><div style="flex:1">' +
+      (r.genin ? '<div style="font:700 ' + pvBodyFs + ' \'Noto Sans JP\',sans-serif;color:#0b3a63;margin-bottom:2px">【作業内容】</div>' : '') +
+      '<div style="font:500 ' + pvBodyFs + '/1.6 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;margin-bottom:8px;color:#16263f;word-break:break-word">' + esc(r.genin || '') + '</div>' +
+      (r.shori ? '<div style="font:700 ' + pvBodyFs + ' \'Noto Sans JP\',sans-serif;color:#0b3a63;margin-bottom:2px">【実施内容】</div>' : '') +
       '<div style="font:500 ' + pvBodyFs + '/1.65 \'Noto Sans JP\',sans-serif;white-space:pre-wrap;color:#16263f;word-break:break-word">' + esc(r.shori || '') + '</div></div>' +
       '<div style="align-self:flex-end;margin-top:10px;width:196px;border:1.4px solid #111;font:600 8.5px \'Noto Sans JP\',sans-serif;background:#fff;overflow:hidden"><div style="display:flex;border-bottom:1px solid #111;background:#f3f3f3"><div style="flex:1;padding:2px 5px">作業終了時の確認事項</div><div style="width:30px;text-align:center;border-left:1px solid #111;padding:2px 0">確認</div></div>' + confirmHtml + '<div style="padding:2px 5px;font-size:7.5px;color:#555">※完了は「✓」 該当なしは「－」</div></div></div></div>' +
       // work time
@@ -898,21 +905,24 @@
   }
   function renderVoice() {
     var inner;
+    var vTgt = S.vTarget || 'shori';
+    var vLbl = vTgt === 'genin' ? '作業内容' : '実施内容';
+    var vLim = LIMIT[vTgt] || LIMIT.shori;
     if (S.vProcessing) {
       inner = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0"><div style="width:54px;height:54px;border:4px solid var(--primary-soft);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite"></div><div style="font:700 13.5px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-top:16px">AIが文章を整えています…</div></div>';
     } else if (S.vResult) {
-      inner = '<div style="background:var(--primary-soft);border:1.5px solid var(--primary);border-radius:14px;padding:14px;margin:6px 0 16px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-bottom:6px">✨ AI整形結果（処置）</div><div style="font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);white-space:pre-wrap">' + esc(S.vResult) + '</div></div>' +
-        '<div style="display:flex;gap:10px"><button' + act('redoVoice') + ' style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">やり直す</button><button' + act('applyVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">処置に反映する</button></div>';
+      inner = '<div style="background:var(--primary-soft);border:1.5px solid var(--primary);border-radius:14px;padding:14px;margin:6px 0 16px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-bottom:6px">✨ AI整形結果（' + vLbl + '）</div><div style="font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);white-space:pre-wrap">' + esc(S.vResult) + '</div></div>' +
+        '<div style="display:flex;gap:10px"><button' + act('redoVoice') + ' style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">やり直す</button><button' + act('applyVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">' + vLbl + 'に反映する</button></div>';
     } else {
       inner = '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--muted)">認識テキスト（手入力も可）</div>' + (S.vListening ? '<div style="font:700 11px \'Noto Sans JP\',sans-serif;color:#c0392b">● 録音中…</div>' : '') + '</div>' +
-        '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-vraw"' + chg('voiceText') + ' placeholder="マイクで話すか、ここに直接入力できます。" style="width:100%;height:120px;border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font:500 14px/1.7 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(S.vRaw) + '</textarea>' + taCounter('cnt-vraw', S.vRaw, LIMIT.shori) +
+        '<textarea maxlength="' + vLim + '" data-counter="cnt-vraw"' + chg('voiceText') + ' placeholder="マイクで話すか、ここに直接入力できます。" style="width:100%;height:120px;border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font:500 14px/1.7 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(S.vRaw) + '</textarea>' + taCounter('cnt-vraw', S.vRaw, vLim) +
         (S.vListening ? '<div style="font:500 13px/1.6 \'Noto Sans JP\',sans-serif;color:var(--primary);margin-top:6px;min-height:18px">' + esc(S.vInterim) + '</div>' : '') + '</div>' +
         '<div style="display:flex;gap:10px"><button' + act('toggleListen') + ' style="flex:1;height:52px;border:1.5px solid ' + (S.vListening ? '#c0392b' : 'var(--primary)') + ';background:' + (S.vListening ? '#fdecea' : '#fff') + ';color:' + (S.vListening ? '#c0392b' : 'var(--primary)') + ';border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">' + (S.vListening ? '● 録音を停止' : '🎤 録音を開始') + '</button><button' + act('aiFormatVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">✨ AIで整える</button></div>';
     }
     return '<div' + act('closeVoice') + ' style="position:absolute;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:24px">' +
       '<div' + act('stop') + ' style="width:100%;max-width:520px;max-height:calc(100% - 48px);overflow-y:auto;background:var(--surface);border-radius:22px;padding:24px;animation:scin .2s ease both">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">🎤</span><div style="font:900 18px \'Noto Sans JP\',sans-serif;color:var(--text)">処置を音声で入力</div></div>' +
-      '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:12px">マイクで話した内容をAIが報告書向けの文章に整えます。</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-size:18px">🎤</span><div style="font:900 18px \'Noto Sans JP\',sans-serif;color:var(--text)">' + vLbl + 'を音声で入力</div></div>' +
+      '<div style="font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:12px">マイクで話した内容をAIが報告書向けの文章に整えます。（' + vLbl + '欄へ反映）</div>' +
       styleSelector() +
       (S.vError ? '<div style="background:#fdecea;border:1px solid #f5c6c0;color:#b03a2e;border-radius:12px;padding:12px 14px;font:600 12.5px/1.6 \'Noto Sans JP\',sans-serif;margin-bottom:14px">' + esc(S.vError) + '</div>' : '') +
       inner +
@@ -1099,7 +1109,7 @@
     openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview' }; }); patchCaseSignature(d.id); },
     // voice (mock; S6 で Gemini 実装)
     setVStyle: function (d) { setState({ vStyle: d.val }); },
-    openVoice: function () { setState({ voiceOpen: true, vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false, vStyle: S.vStyle || 'auto' }); },
+    openVoice: function (d) { setState({ voiceOpen: true, vTarget: (d && d.target) || 'shori', vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false, vStyle: S.vStyle || 'auto' }); },
     closeVoice: function () { stopRec(); setState({ voiceOpen: false, vListening: false }); },
     toggleListen: function () { toggleListen(); },
     // やり直す＝音声入力からやり直し（整形結果と認識テキストを消して録音画面へ戻す）
@@ -1118,15 +1128,16 @@
         fallback('AI整形に失敗したため簡易整形しました：' + errMsg(e));
       });
     },
-    // 処置へ「置き換え」で反映（従来の追記だと重複・肥大化の原因になるため）
+    // 対象欄（作業内容=genin / 実施内容=shori）へ「置き換え」で反映（従来の追記だと重複・肥大化の原因になるため）
     applyVoice: function () {
-      var res = S.vResult;
+      var res = S.vResult; var tgt = S.vTarget || 'shori'; var lim = LIMIT[tgt] || LIMIT.shori;
       if (!res) { setState({ voiceOpen: false, vListening: false }); return; }
-      var truncated = volume(res) > LIMIT.shori;
-      var capped = capVolume(res, LIMIT.shori);
-      mutateCase(function (o) { return Object.assign({}, o, { shori: capped }); });
+      var truncated = volume(res) > lim;
+      var capped = capVolume(res, lim);
+      mutateCase(function (o) { var patch = {}; patch[tgt] = capped; return Object.assign({}, o, patch); });
       setState({ voiceOpen: false, vListening: false });
-      toast(truncated ? '処理を反映しました（上限のため一部省略）' : '処理に反映しました');
+      var lbl = tgt === 'genin' ? '作業内容' : '実施内容';
+      toast(truncated ? (lbl + 'に反映しました（上限のため一部省略）') : (lbl + 'に反映しました'));
     },
     // plate (mock; S6 で Gemini Vision 実装)
     openPlate: function () { setState({ plateOpen: true, plateImg: '', plateProcessing: false, plateResult: null }); },
