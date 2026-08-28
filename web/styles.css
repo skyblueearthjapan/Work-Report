@@ -9,6 +9,9 @@
   ::-webkit-scrollbar-thumb{background:#c7ccd6;border-radius:8px;border:2px solid transparent;background-clip:content-box}
   .scr{scrollbar-width:thin}
   button{font-family:inherit}
+  /* 社内ポータルへ移動ボタン。基本色はインラインで持たせ、ホバーのみCSSで上書き（インライン優先のため!important） */
+  .portal-btn:hover{background:#177a43 !important}
+  .portal-btn:active{opacity:.92}
   @keyframes scin{from{transform:translateY(6px);opacity:.4}to{transform:none;opacity:1}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media print{

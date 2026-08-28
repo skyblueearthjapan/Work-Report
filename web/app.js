@@ -11,6 +11,8 @@
   var TODAY = BOOT.today || '2026-06-30';
   var WT = ['据付', '移設', '納品', '点検', '改造', '修理', '調査'];
   var MASTER = BOOT.master || { kobans: [], staff: [], depts: [], importedAt: '' };
+  // 社内ポータル(GAS)。出図管理／在庫管理／残業・休日出勤申請アプリと同一の遷移先。
+  var PORTAL_URL = 'https://script.google.com/a/macros/lineworks-local.info/s/AKfycbx2eyJMOYP9o--GPBuhY-pj071IIR6Kqb_0xALwwNzdLQZux0dIAlL3P9EoCucnzXA/exec';
   // 文字数上限（PDFレイアウト崩れ防止・延々入力の抑止）
   // ボリューム上限（改行も加算＝空行の連発でPDFが伸びるのを抑止）
   var LIMIT = { genin: 300, shori: 500 };
@@ -294,11 +296,19 @@
     var tm = (S.screen === 'newForm' && S.editId) ? ['案件情報の編集', '管理者：内容を修正'] : (titleMap[S.screen] || ['', '']);
     var showBack = S.screen !== 'home';
 
+    // 社内ポータルへ移動（出図管理/在庫管理アプリと同一仕様の緑ピル・外部リンク）。狭い画面では「ポータル」に短縮。
+    var portalLabel = (mode === 'mobile') ? 'ポータル' : '社内ポータルへ移動';
+    var portalBtn =
+      '<a href="' + PORTAL_URL + '" target="_top" data-act="goPortal" class="portal-btn" title="社内ポータルへ移動" aria-label="社内ポータルへ移動" style="display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:9999px;background:#1f9d55;color:#fff;font:600 13px \'Noto Sans JP\',sans-serif;text-decoration:none;flex:none;white-space:nowrap;transition:background .15s">' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+      '<span>' + portalLabel + '</span></a>';
+
     var header =
       '<div style="height:70px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--primary);color:#fff">' +
       (showBack ? '<button' + act('goBack') + ' style="width:44px;height:44px;border:none;background:rgba(255,255,255,.16);color:#fff;border-radius:12px;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none">←</button>' : '') +
       '<div style="flex:1;min-width:0"><div style="font:700 19px/1.2 \'Noto Sans JP\',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(tm[0]) + '</div>' +
       '<div style="font:500 12px/1.3 \'Noto Sans JP\',sans-serif;opacity:.72">' + esc(tm[1]) + '</div></div>' +
+      portalBtn +
       '<button' + act('goSettings') + ' style="height:40px;padding:0 14px;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:10px;font:600 13px \'Noto Sans JP\',sans-serif;cursor:pointer;flex:none">設定</button>' +
       '</div>';
 
@@ -979,6 +989,14 @@
     goNewType: function () { pushNav('newType'); },
     goSign: function () { nav('sign'); },
     goPreview: function () { var fromReport = S.screen === 'report'; nav('preview'); if (fromReport) persistActive().catch(function (e) { toast(errMsg(e), true); }); },
+    // 社内ポータルへ移動（外部リンク）。報告書画面のときだけ未保存の編集を保存してから遷移。それ以外は素の<a>遷移に任せる。
+    goPortal: function (d, e) {
+      if (S.screen !== 'report') return;
+      if (e && e.preventDefault) e.preventDefault();
+      setBusy(true);
+      persistActive().then(function () { (window.top || window).location.href = PORTAL_URL; })
+        .catch(function (err) { setBusy(false); toast('保存に失敗しました：' + errMsg(err), true); });
+    },
     // メール送信画面へ。プレビュー(#pdf-print)がある間にPDFを用意してから遷移（添付用）
     goSend: function () {
       var doNav = function () { setState(function (s) { return { history: s.history.concat([s.screen]), screen: 'send', sent: false }; }); };
