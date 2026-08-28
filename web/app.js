@@ -902,7 +902,7 @@
       inner = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0"><div style="width:54px;height:54px;border:4px solid var(--primary-soft);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite"></div><div style="font:700 13.5px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-top:16px">AIが文章を整えています…</div></div>';
     } else if (S.vResult) {
       inner = '<div style="background:var(--primary-soft);border:1.5px solid var(--primary);border-radius:14px;padding:14px;margin:6px 0 16px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-bottom:6px">✨ AI整形結果（処置）</div><div style="font:500 14px/1.8 \'Noto Sans JP\',sans-serif;color:var(--text);white-space:pre-wrap">' + esc(S.vResult) + '</div></div>' +
-        '<div style="display:flex;gap:10px"><button' + act('aiFormatVoice') + ' style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">やり直す</button><button' + act('applyVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">処置に反映する</button></div>';
+        '<div style="display:flex;gap:10px"><button' + act('redoVoice') + ' style="flex:none;width:120px;height:52px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">やり直す</button><button' + act('applyVoice') + ' style="flex:1;height:52px;border:none;background:var(--primary);color:#fff;border-radius:13px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">処置に反映する</button></div>';
     } else {
       inner = '<div style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="font:700 11px \'Noto Sans JP\',sans-serif;color:var(--muted)">認識テキスト（手入力も可）</div>' + (S.vListening ? '<div style="font:700 11px \'Noto Sans JP\',sans-serif;color:#c0392b">● 録音中…</div>' : '') + '</div>' +
         '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-vraw"' + chg('voiceText') + ' placeholder="マイクで話すか、ここに直接入力できます。" style="width:100%;height:120px;border:1.5px solid var(--border);border-radius:12px;padding:11px 13px;font:500 14px/1.7 \'Noto Sans JP\',sans-serif;color:var(--text);background:var(--surface);resize:none">' + esc(S.vRaw) + '</textarea>' + taCounter('cnt-vraw', S.vRaw, LIMIT.shori) +
@@ -1102,16 +1102,20 @@
     openVoice: function () { setState({ voiceOpen: true, vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false, vStyle: S.vStyle || 'auto' }); },
     closeVoice: function () { stopRec(); setState({ voiceOpen: false, vListening: false }); },
     toggleListen: function () { toggleListen(); },
+    // やり直す＝音声入力からやり直し（整形結果と認識テキストを消して録音画面へ戻す）
+    redoVoice: function () { stopRec(); setState({ vResult: '', vRaw: '', vInterim: '', vError: '', vProcessing: false, vListening: false }); },
     aiFormatVoice: function () {
       var raw = (S.vRaw + ' ' + S.vInterim).trim(); stopRec();
-      setState({ vListening: false, vProcessing: true, vResult: '' });
-      // 入力が空、または Gemini 未設定ならモック整形にフォールバック
-      if (!raw || !BOOT.geminiEnabled) { setTimeout(function () { setState({ vProcessing: false, vResult: mockSummarize(raw) }); }, 700); return; }
+      // 入力が空なら整形せず、録音/入力を促す（サンプル文は出さない）
+      if (!raw) { setState({ vListening: false, vProcessing: false, vResult: '', vError: '先にマイクで話すか、テキストを入力してください。' }); return; }
+      setState({ vListening: false, vProcessing: true, vResult: '', vError: '' });
+      // Gemini 未設定なら簡易整形にフォールバック
+      var fallback = function (extra) { var m = mockSummarize(raw); setState(Object.assign({ vProcessing: false }, m ? { vResult: m } : { vResult: '', vError: '整えられる内容がありませんでした。もう一度、話すか入力してください。' })); if (extra) toast(extra, true); };
+      if (!BOOT.geminiEnabled) { setTimeout(function () { fallback(); }, 700); return; }
       server('aiFormatShori', raw, S.vStyle || 'auto').then(function (text) {
-        setState({ vProcessing: false, vResult: text || mockSummarize(raw) });
+        if (text) { setState({ vProcessing: false, vResult: text }); } else { fallback(); }
       }).catch(function (e) {
-        setState({ vProcessing: false, vResult: mockSummarize(raw) });
-        toast('AI整形に失敗したため簡易整形しました：' + errMsg(e), true);
+        fallback('AI整形に失敗したため簡易整形しました：' + errMsg(e));
       });
     },
     // 処置へ「置き換え」で反映（従来の追記だと重複・肥大化の原因になるため）
@@ -1299,7 +1303,7 @@
   }
   function mockSummarize(raw) {
     var t = (raw || '').replace(/[\s　]+/g, '').replace(/(えーと|あのー|あの|まあ|なんか|そのー|えっと)/g, '');
-    if (!t) return '主軸まわりの軸受を新品へ交換し、芯出しと回転バランスを再調整しました。潤滑経路を清掃のうえ規定グリスを再充填し、各部を規定トルクで締め直しています。交換後に連続運転試験を実施し、異音・振動・温度上昇が基準値内であること、安全装置の不要作動がないことを確認しました。最後にお客様立会いのもと動作確認を行い、正常稼働を確認して作業を完了しました。';
+    if (!t) return '';
     var s = t.replace(/(した|ました|です|ます|認した|了した)(?=[^。])/g, '$1。');
     if (!/。$/.test(s)) s += '。';
     return s;
