@@ -8,6 +8,15 @@
 
   var BOOT = window.BOOT || {};
   var COMPANY = BOOT.company || { companyLW: 'LINE W', companyTS: 'テクノサービス' };
+  // 帳票（PDF）に印字する宛先・社名・連絡先。紙の作業書（Sampledata の LW25083 / TS26052）を正とする。
+  var PAPER_CO = {
+    LW: { name: '株式会社 ラインワークス', parent: '', tel: '043-250-1481', fax: '043-257-9488' },
+    TS: { name: 'テクノサービスカンパニー', parent: '＜株式会社 ラインワークス＞', tel: '043-250-1481', fax: '043-301-2465' }
+  };
+  var PAPER_ADDR = '〒262-0012　千葉県千葉市花見川区千種町53';
+  function paperCo(type) { return PAPER_CO[type === 'TS' ? 'TS' : 'LW']; }
+  // フッターの社名・住所・連絡先（帳票画面とPDFプレビューで共通）
+  function paperFootText(type) { var p = paperCo(type); return esc(PAPER_ADDR) + (p.parent ? '<br>' + esc(p.parent) : '') + '<br>Tel ' + esc(p.tel) + ' ／ Fax ' + esc(p.fax); }
   var TODAY = BOOT.today || '2026-06-30';
   var WT = ['据付', '移設', '納品', '点検', '改造', '修理', '調査'];
   var MASTER = BOOT.master || { kobans: [], staff: [], depts: [], importedAt: '' };
@@ -119,11 +128,11 @@
   function errMsg(e) { return (e && e.message) ? e.message : String(e || 'エラーが発生しました'); }
   var _toastTimer = null;
   function toast(msg, isErr) {
-    setState({ toastMsg: msg, toastErr: !!isErr });
+    S.toastMsg = msg; S.toastErr = !!isErr; paintOverlays();
     if (_toastTimer) clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(function () { setState({ toastMsg: '' }); }, isErr ? 5000 : 2200);
+    _toastTimer = setTimeout(function () { S.toastMsg = ''; paintOverlays(); }, isErr ? 5000 : 2200);
   }
-  function setBusy(v) { setState({ busy: v }); }
+  function setBusy(v) { S.busy = v; paintOverlays(); }
   // 案件一覧＋履歴件数をサーバーから再取得して state を同期
   function reloadState(then) {
     setBusy(true);
@@ -184,7 +193,6 @@
   }
   function fmtDate(d) { if (!d) return '　'; var p = String(d).split('-'); if (p.length === 3) return p[0] + '/' + p[1] + '/' + p[2]; if (p.length === 2) return p[0] + '/' + p[1]; return d; }
   function diffM(a, b) { if (!a || !b) return null; var x = a.split(':').map(Number), y = b.split(':').map(Number); var m = (y[0] * 60 + y[1]) - (x[0] * 60 + x[1]); if (m < 0) m += 1440; return m; }
-  function fmtH(m) { if (m == null || m <= 0) return ''; var h = Math.floor(m / 60), mm = m % 60; return h + (mm ? ('.' + Math.round(mm / 6)) : '') + 'H'; }
   function fmtHM(m) { if (m == null || m <= 0) return '—'; return Math.floor(m / 60) + '時間' + (m % 60 ? (' ' + (m % 60) + '分') : ''); }
   function fillTemplate(str, c) { if (!str) return ''; return str.replace(/\{工番\}/g, c ? c.koban : '').replace(/\{お客様名\}/g, c ? c.nohinSaki : '').replace(/\{作業日\}/g, c ? fmtDate(c.yoteibi) : ''); }
   function pdfName(c) { if (!c) return '作業報告書'; var safe = function (x) { return String(x || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim(); }; var d = c.yoteibi || TODAY; return ['作業報告書', safe(c.nohinSaki), safe(c.kishu), safe(c.koban), safe(d)].filter(Boolean).join('_'); }
@@ -213,20 +221,7 @@
   var FONT = "'Noto Sans JP',system-ui,sans-serif";
   var labStyle = "display:block;font:700 12.5px 'Noto Sans JP',sans-serif;color:var(--text);margin-bottom:7px";
   var inpStyle = "width:100%;height:52px;border:1.5px solid var(--border);border-radius:13px;padding:0 15px;font:600 15px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface)";
-  var inpSm = "width:100%;height:48px;border:1.5px solid var(--border);border-radius:12px;padding:0 13px;font:600 14.5px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface)";
-  var taSm = "width:100%;height:84px;border:1.5px solid var(--border);border-radius:12px;padding:11px 14px;font:500 14.5px/1.6 'Noto Sans JP',sans-serif;color:var(--text);resize:none;background:var(--surface)";
-  var taMd = "width:100%;height:130px;border:1.5px solid var(--border);border-radius:12px;padding:11px 14px;font:500 14.5px/1.7 'Noto Sans JP',sans-serif;color:var(--text);resize:none;background:var(--surface)";
-  var secTitle = "font:700 14px 'Noto Sans JP',sans-serif;color:var(--text);margin-bottom:12px";
-  var secLabel = "font:800 14px 'Noto Sans JP',sans-serif;color:var(--primary);margin:4px 2px 10px;letter-spacing:.02em";
-  var cardStyle = "background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:18px;display:flex;flex-direction:column;gap:14px";
   var miniLab = "font:700 12px 'Noto Sans JP',sans-serif;color:var(--muted);margin-bottom:7px";
-  var rowDate = "width:118px;height:46px;border:1.5px solid var(--border);border-radius:10px;padding:0 6px;font:600 12.5px 'Noto Sans JP',sans-serif;color:var(--text)";
-  var rowTime = "width:84px;height:46px;border:1.5px solid var(--border);border-radius:10px;padding:0 6px;font:600 12.5px 'Noto Sans JP',sans-serif;color:var(--text)";
-  var rowDel = "width:34px;height:34px;flex:none;border:none;background:#f0f1f4;color:#9aa1ac;border-radius:9px;font-size:17px;cursor:pointer";
-  var addBtn = "margin-top:10px;width:100%;height:44px;border:1.5px dashed var(--primary-tint);background:var(--primary-soft);color:var(--primary);border-radius:11px;font:700 13px 'Noto Sans JP',sans-serif;cursor:pointer";
-  var addBtnSm = "margin-top:8px;align-self:flex-start;height:38px;padding:0 16px;border:1.5px dashed var(--primary-tint);background:var(--primary-soft);color:var(--primary);border-radius:10px;font:700 12.5px 'Noto Sans JP',sans-serif;cursor:pointer";
-  var confirmRow = "display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:13px 2px;cursor:pointer";
-  var staffNumStyle = "width:30px;height:30px;flex:none;border-radius:50%;background:var(--primary);color:#fff;font:800 13px 'Noto Sans JP',sans-serif;display:flex;align-items:center;justify-content:center";
   var pvLab = "font:700 8px 'Noto Sans JP',sans-serif;color:#555";
   var selStyle = "height:44px;border:1.5px solid var(--border);border-radius:11px;padding:0 10px;font:600 13.5px 'Noto Sans JP',sans-serif;color:var(--text);background:var(--surface);min-width:0";
 
@@ -278,11 +273,8 @@
     var varStr = Object.keys(vars).map(function (k) { return k + ':' + vars[k]; }).join(';');
 
     var rootStyle, bezelStyle, frameStyle;
-    if (mode === 'tablet') {
-      rootStyle = varStr + ';min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding:28px;background:#e6e8ee;font-family:' + FONT;
-      bezelStyle = "background:#0e1218;padding:16px;border-radius:48px;box-shadow:0 36px 80px rgba(15,23,42,.34),inset 0 0 0 2px #20262f";
-      frameStyle = "width:800px;height:1160px;background:var(--bg);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;position:relative";
-    } else if (mode === 'mobile') {
+    // タブレット実機でも画面いっぱいに表示する（旧プロトタイプの端末枠＝800×1160固定は実機で右端・下端が切れていた）
+    if (mode === 'mobile' || mode === 'tablet') {
       rootStyle = varStr + ';min-height:100vh;background:var(--bg);font-family:' + FONT;
       bezelStyle = "background:none;padding:0;border-radius:0;box-shadow:none";
       frameStyle = "width:100vw;height:100vh;background:var(--bg);border-radius:0;overflow:hidden;display:flex;flex-direction:column;position:relative";
@@ -320,16 +312,30 @@
       '<div class="scr" style="flex:1;overflow-y:auto;overflow-x:hidden;position:relative">' + body + '</div>' +
       modals + '</div></div>';
 
-    var overlays = '';
-    if (S.busy) overlays += '<div style="position:fixed;top:0;left:0;right:0;z-index:200;display:flex;justify-content:center;pointer-events:none"><div style="margin-top:12px;background:rgba(15,23,42,.86);color:#fff;padding:8px 16px;border-radius:20px;font:700 12.5px \'Noto Sans JP\',sans-serif;display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>処理中…</div></div>';
-    if (S.toastMsg) overlays += '<div style="position:fixed;bottom:24px;left:0;right:0;z-index:200;display:flex;justify-content:center;pointer-events:none"><div style="background:' + (S.toastErr ? '#b03a2e' : 'rgba(15,23,42,.9)') + ';color:#fff;padding:11px 20px;border-radius:12px;font:700 13px \'Noto Sans JP\',sans-serif;max-width:80%;box-shadow:0 8px 24px rgba(0,0,0,.24)">' + esc(S.toastMsg) + '</div></div>';
+    // 入力中の欄を覚えておき、描き直した後も同じ欄にフォーカスを戻す（入力パネルでの打鍵を途切れさせない）
+    var ae = document.activeElement, focusId = (ae && ae.id && root.contains(ae)) ? ae.id : '', selS = null, selE = null;
+    if (focusId) { try { selS = ae.selectionStart; selE = ae.selectionEnd; } catch (e) {} }
 
     root.setAttribute('style', rootStyle);
-    root.innerHTML = frame + overlays;
+    root.innerHTML = frame + '<div id="ovl">' + overlaysHtml() + '</div>';
 
     var scr2 = root.querySelector('.scr'); if (scr2) scr2.scrollTop = prevScroll;
     if (S.screen === 'sign') attachSig();
+    if (S.screen === 'newForm' || S.screen === 'report') {
+      fitPaper(); wireDrum();
+      if (S.fsScrollTo) { scrollToField(S.fsScrollTo); S.fsScrollTo = null; }
+    }
+    if (focusId) { var fe = document.getElementById(focusId); if (fe) { try { fe.focus({ preventScroll: true }); if (selS !== null) fe.setSelectionRange(selS, selE); } catch (e) {} } }
   }
+
+  // 処理中・トースト表示（画面全体を描き直さずにこの部分だけ差し替える）
+  function overlaysHtml() {
+    var overlays = '';
+    if (S.busy) overlays += '<div style="position:fixed;top:0;left:0;right:0;z-index:200;display:flex;justify-content:center;pointer-events:none"><div style="margin-top:12px;background:rgba(15,23,42,.86);color:#fff;padding:8px 16px;border-radius:20px;font:700 12.5px \'Noto Sans JP\',sans-serif;display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>処理中…</div></div>';
+    if (S.toastMsg) overlays += '<div style="position:fixed;bottom:24px;left:0;right:0;z-index:200;display:flex;justify-content:center;pointer-events:none"><div style="background:' + (S.toastErr ? '#b03a2e' : 'rgba(15,23,42,.9)') + ';color:#fff;padding:11px 20px;border-radius:12px;font:700 13px \'Noto Sans JP\',sans-serif;max-width:80%;box-shadow:0 8px 24px rgba(0,0,0,.24)">' + esc(S.toastMsg) + '</div></div>';
+    return overlays;
+  }
+  function paintOverlays() { var o = document.getElementById('ovl'); if (o) o.innerHTML = overlaysHtml(); else render(); }
 
   function screenBody(isPC) {
     switch (S.screen) {
@@ -422,245 +428,386 @@
       '<div style="margin-top:14px;font:700 13px \'Noto Sans JP\',sans-serif;color:var(--primary)">この種別で登録する →</div></button></div>';
   }
 
-  /* ---------------- shared small builders ---------------- */
-  function wtButtons(scope, o) {
-    return WT.map(function (label) { var on = !!o.workTypes[label]; return '<button' + act('toggleWorkType', { scope: scope, key: label }) + ' style="height:42px;padding:0 16px;border-radius:11px;cursor:pointer;font:700 14px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--text)') + '">' + label + '</button>'; }).join('');
+  /* ==================================================================
+   * 帳票型入力（新規・編集／作業報告書）
+   * 仕上がりのPDFと同じ枠を画面に出し、枠をタップすると入力パネル（S.edit）が開く。
+   * 入力パネル内の文字入力は再描画せずに値だけ書き換え（silentSet）、閉じたときに描画する。
+   * ================================================================== */
+  var FS_WHO = { adm: '管理者', wk: '作業者', cu: 'お客様', st: '責任者' };
+  var PAPER_W = 760;
+  function fsScope() { return S.screen === 'newForm' ? 'new' : 'case'; }
+  function fsObj(scope) { return scope === 'new' ? S.newForm : (findCase(S.activeId) || blankForm('LW')); }
+  // 再描画せずに対象（新規フォーム or アクティブ案件）を書き換える
+  function silentSet(scope, fn) {
+    if (scope === 'new') { S.newForm = fn(Object.assign({}, S.newForm)); return; }
+    S.cases = S.cases.map(function (c) { return c.id === S.activeId ? fn(Object.assign({}, c)) : c; });
   }
-  function paidButtons(scope, cur) {
-    return ['有償', '無償', '調整中'].map(function (label) { var on = cur === label; return '<button' + act('setPaid', { scope: scope, val: label }) + ' style="height:46px;padding:0 20px;border-radius:11px;cursor:pointer;font:700 15px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--text)') + '">' + label + '</button>'; }).join('');
+  function commonStaff(o) { return (o.staff || []).filter(function (st) { return !st.separate; }); }
+  function rowDone(r) { return !!(r && r.date && r.start && r.end); }
+  function rowTouched(r) { return !!(r && (r.start || r.end || r.km)); }
+  function workDate(o) { var d = o.yoteibi || ''; (o.commonWork || []).forEach(function (e) { if (!d && e.date) d = e.date; }); return d; }
+  function kaninParts(o) {
+    var name = (o.kanin && o.kanin.name) || (o.type === 'LW' ? '製造部 田中' : 'TSC 木下');
+    var p = name.split(/\s+/);
+    return { name: name, dept: p.length > 1 ? p[0] : '', person: p.length > 1 ? p.slice(1).join(' ') : name };
   }
-  function markStyleOf(v) { var b = "width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:700 16px 'Noto Sans JP',sans-serif;flex:none;"; if (v === '✓') return b + 'background:var(--primary);color:#fff'; if (v === '−') return b + 'background:#eef0f3;color:#6b7480'; return b + 'background:#fff;border:1.5px dashed #c9ced8;color:#c9ced8'; }
-  function confirmButtons(scope, o) {
-    return (o.confirmItems || []).map(function (it) { return '<button' + act('cycleConfirm', { scope: scope, key: it.key }) + ' style="' + confirmRow + '"><span style="' + markStyleOf(it.value) + '">' + (it.value || '＋') + '</span><span style="font:600 14px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(it.label) + '</span></button>'; }).join('');
+  // 'row:list:i[:si]' → 行の参照
+  function fsRowRef(id) { var p = String(id).split(':'); return { list: p[1], i: +p[2], si: p.length > 3 ? p[3] : undefined }; }
+  function fsRowArr(o, ref) { return ref.si !== undefined ? (((o.staff || [])[+ref.si] || {})[ref.list] || []) : (o[ref.list] || []); }
+  function fsRow(o, ref) { return fsRowArr(o, ref)[ref.i]; }
+  function isTravelList(list) { return list === 'commonTravel' || list === 'travel'; }
+  function fsRowNames(o, ref) {
+    if (ref.si !== undefined) { var st = (o.staff || [])[+ref.si] || {}; return st.name || ('作業者' + (+ref.si + 1)); }
+    return commonStaff(o).map(function (st) { return st.name; }).filter(Boolean).join('・') || '（全員）';
   }
-  function staffRows(scope, o) {
-    return (o.staff || []).map(function (st, si) {
-      var canRemove = (o.staff || []).length > 1;
-      return '<div style="display:flex;align-items:center;gap:10px"><span style="' + staffNumStyle + '">' + (si + 1) + '</span>' +
-        '<input class="req"' + chg('staffName', { scope: scope, si: si }) + ' value="' + esc(st.name) + '" placeholder="スタッフ名" style="' + inpSm + ';flex:1;min-width:0">' +
-        (canRemove ? '<button' + act('removeStaff', { scope: scope, si: si }) + ' style="' + rowDel + '">×</button>' : '') + '</div>';
+
+  // 未入力の枠（「次の未入力へ」の巡回順＝帳票の上から下）。新規登録は管理者が書く欄だけ。
+  function fsEmpties(scope, o) {
+    var L = [], wt = o.workTypes || {}, staff = o.staff || [];
+    if (!WT.some(function (k) { return wt[k]; })) L.push('wt');
+    if (!String(o.koban || '').trim()) L.push('koban');
+    if (!String(o.nohinSaki || '').trim()) L.push('okyaku');
+    if (!o.kishu) L.push('kishu');
+    if (!workDate(o)) L.push('date');
+    if (!staff.some(function (st) { return String(st.name || '').trim(); })) L.push('staff');
+    if (!o.genin) L.push('genin');
+    if (scope === 'new') return L;
+    if (!o.shori) L.push('shori');
+    (o.confirmItems || []).forEach(function (it) { if (!it.value) L.push('cf:' + it.key); });
+    if (commonStaff(o).length) (o.commonWork || []).forEach(function (r, i) { if (!rowDone(r)) L.push('row:commonWork:' + i); });
+    staff.forEach(function (st, si) { if (st.separate) (st.work || []).forEach(function (r, i) { if (!rowDone(r)) L.push('row:work:' + i + ':' + si); }); });
+    (o.commonTravel || []).forEach(function (r, i) { if (rowTouched(r) && !rowDone(r)) L.push('row:commonTravel:' + i); });
+    staff.forEach(function (st, si) { if (st.separate) (st.travel || []).forEach(function (r, i) { if (rowTouched(r) && !rowDone(r)) L.push('row:travel:' + i + ':' + si); }); });
+    if (!o.oshaName) L.push('osha');
+    if (!o.tantoushaName) L.push('tantousha');
+    if (!o.signature) L.push('sign');
+    if (!(o.kanin && o.kanin.stamped)) L.push('kanin');
+    return L;
+  }
+
+  /* ---------------- 帳票本体 ---------------- */
+  function viewFormSheet(scope) {
+    var o = fsObj(scope), isNew = scope === 'new', isLW = o.type === 'LW';
+    var E = {}; fsEmpties(scope, o).forEach(function (k) { E[k] = 1; });
+    var sel = S.edit ? S.edit.id : '';
+    var cell = function (id, who, inner, cls, off) {
+      if (off) return '<div class="fs-off' + (cls ? ' ' + cls : '') + '" data-fsid="' + esc(id) + '">' + inner + '</div>';
+      return '<div' + act('fsOpen', { id: id }) + ' data-fsid="' + esc(id) + '" role="button" tabindex="0" class="fs-f' + (E[id] ? ' empty' : '') + (sel === id ? ' sel' : '') + (cls ? ' ' + cls : '') + '">' +
+        (who ? '<i class="fs-who ' + who + '">' + FS_WHO[who] + '</i>' : '') + inner + '</div>';
+    };
+    var V = function (v, ph) { return '<span class="fs-val">' + (v ? esc(v) : '<span class="fs-ph">' + (ph || 'タップして入力') + '</span>') + '</span>'; };
+    var L = function (t) { return '<span class="fs-lbl">' + t + '</span>'; };
+
+    var wt = o.workTypes || {};
+    var title = '<div class="fs-ttl' + (E.wt ? ' empty' : '') + '" data-fsid="wt">' + WT.map(function (w, i) {
+      return (i ? '<span class="fs-dot">・</span>' : '') + '<span' + act('fsWT', { key: w }) + ' role="button" tabindex="0" class="fs-wt' + (wt[w] ? ' on' : '') + '">' + w + '</span>';
+    }).join('') + '<span class="fs-tail">作業書</span></div>';
+
+    var okyaku = V(o.nohinSaki) + (o.okyakuSub ? '<span class="fs-sub">' + esc(o.okyakuSub) + '</span>' : '') + (o.nohinSaki ? '<span class="fs-sama">様</span>' : '');
+    var staffNames = (o.staff || []).map(function (x) { return x.name; }).filter(Boolean).join('・');
+    var kubun = '<div class="fs-kubun">' + ['有償', '無償', '調整中'].map(function (p) { return '<span class="' + (o.paid === p ? 'on' : '') + '">' + p + '</span>'; }).join('') + '</div>';
+    var kp = kaninParts(o), stamped = !!(o.kanin && o.kanin.stamped);
+    var kaninInner = '<span class="fs-lbl">' + (isLW ? '製造' : 'TSC') + '</span>' + (stamped
+      ? '<div class="fs-stamp"><small>' + esc(kp.dept) + '</small><span>' + esc(kp.person) + '</span></div>'
+      : '<span class="fs-val"><span class="fs-ph">' + (isNew ? '現場から戻った後に押印' : '確認印を押す') + '</span></span>');
+
+    var head =
+      '<div class="fs-row" style="grid-template-columns:130px 1fr 150px 130px">' +
+      cell('koban', 'adm', L('工番 №') + V(o.koban), 'fs-c') +
+      cell('okyaku', 'adm', L('お客様名') + okyaku, 'fs-c') +
+      cell('kishu', 'adm', L('機種') + V(o.kishu), 'fs-c') +
+      cell('date', 'adm', L('作業日') + V(fmtDate(workDate(o)).trim()), 'fs-c') + '</div>' +
+      '<div class="fs-row fs-thick" style="grid-template-columns:130px 1fr 150px 130px">' +
+      cell('motoKoban', 'adm', L('元工番') + V(o.motoKoban, '（あれば）'), 'fs-c') +
+      cell('staff', 'adm', L('作業者名') + V(staffNames), 'fs-c') +
+      cell('paid', 'adm', L('区分') + kubun, 'fs-c') +
+      cell('kanin', 'st', kaninInner, 'fs-c fs-kanin', isNew) + '</div>';
+
+    var cf = (o.confirmItems || []).map(function (it) {
+      return '<div' + act('fsCf', { key: it.key }) + ' data-fsid="cf:' + esc(it.key) + '" role="button" tabindex="0" class="fs-cfr fs-f' + (E['cf:' + it.key] ? ' empty' : '') + (sel === 'cf:' + it.key ? ' sel' : '') + '"><div>' + esc(it.label) + '</div><div>' + (it.value ? esc(it.value) : '<span class="fs-ph">タップ</span>') + '</div></div>';
     }).join('');
+    var content = '<div class="fs-row fs-thick fs-naiyou"><div class="fs-vlabel">作業内容</div><div class="fs-nbody">' +
+      cell('genin', 'adm', '<h4>【作業内容】</h4><div class="fs-txt">' + (o.genin ? esc(o.genin) : '<span class="fs-ph">タップして入力（管理者が事前に記入）</span>') + '</div>', 'fs-sec fs-a') +
+      cell('shori', 'wk', '<h4>【実施内容】</h4><div class="fs-txt">' + (o.shori ? esc(o.shori) : '<span class="fs-ph">' + (isNew ? '現場で作業者が記入します' : 'タップして入力 ／ 🎤 音声でも入力できます') + '</span>') + '</div>', 'fs-sec fs-b', isNew) +
+      '<div class="fs-confirm"><div class="fs-cfh"><div>作業終了時の確認事項</div><div>確認</div></div>' + cf + '<div class="fs-cff">※完了は「✓」 該当なしは「－」（枠をタップで切替）</div></div>' +
+      '</div></div>';
+
+    var table = function (kind) {
+      var travel = kind === 'travel';
+      var cl = travel ? 'commonTravel' : 'commonWork', sl = travel ? 'travel' : 'work';
+      var rows = [];
+      if (commonStaff(o).length || (o[cl] || []).some(rowTouched)) (o[cl] || []).forEach(function (r, i) { rows.push({ id: 'row:' + cl + ':' + i, r: r, ref: { list: cl, i: i } }); });
+      (o.staff || []).forEach(function (st, si) { if (st.separate) (st[sl] || []).forEach(function (r, i) { rows.push({ id: 'row:' + sl + ':' + i + ':' + si, r: r, ref: { list: sl, i: i, si: String(si) } }); }); });
+      var tot = 0;
+      var html = rows.map(function (x) {
+        var r = x.r || {}, m = diffM(r.start, r.end); if (m) tot += m;
+        var tm = (esc(r.start) || '<span class="fs-ph">--:--</span>') + ' 〜 ' + (esc(r.end) || '<span class="fs-ph">--:--</span>');
+        var inner = travel
+          ? '<div>' + esc(fsRowNames(o, x.ref)) + '</div><div>' + esc(r.dir || '往路') + '</div><div>' + (esc(fmtDate(r.date).trim()) || '<span class="fs-ph">日付</span>') + '</div><div>' + tm + '</div><div>' + (r.km ? esc(r.km) + ' Km' : '') + '</div>'
+          : '<div>' + esc(fsRowNames(o, x.ref)) + '</div><div>' + (esc(fmtDate(r.date).trim()) || '<span class="fs-ph">日付</span>') + '</div><div>' + tm + '</div><div class="fs-tot">' + (m ? '計 ' + fmtHM(m) : '') + '</div>';
+        return cell(x.id, 'wk', inner, 'fs-tr ' + (travel ? 'fs-trv' : 'fs-wrk'), isNew);
+      }).join('');
+      // 合計はPDFと同じ算出（共通行＋別行動の行）
+      var all = sumWork(o[cl]); (o.staff || []).forEach(function (st) { if (st.separate) all += sumWork(st[sl]); });
+      var add = isNew ? '' : '<div class="fs-addrow"><button' + act('fsAddRow', { kind: kind }) + ' type="button">＋ ' + (travel ? '移動時間' : '作業時間') + 'の行を追加</button></div>';
+      var note = isNew ? '<div class="fs-note">' + (travel ? '移動時間' : '作業時間') + 'は現場で作業者が入力します</div>' : '';
+      return '<div class="fs-row fs-tbl"><div class="fs-tl">' + (travel ? '移動時間' : '作業時間') + '</div><div class="fs-trows">' + html + note + add +
+        '<div class="fs-sum"><div>' + (travel ? '移動時間' : '作業時間') + ' 合計</div><div>' + fmtHM(all) + '</div></div></div></div>';
+    };
+    var allW = sumWork(o.commonWork), allT = sumWork(o.commonTravel);
+    (o.staff || []).forEach(function (st) { if (st.separate) { allW += sumWork(st.work); allT += sumWork(st.travel); } });
+
+    var recipient = paperCo(o.type).name;
+    var approve = '<div class="fs-row fs-thick fs-appr"><div class="fs-al">上記作業が終了したことを承認します。<br><b>' + esc(recipient) + '　殿</b></div><div class="fs-ar">' +
+      cell('osha', 'cu', '<span class="fs-lbl">御社名</span><span class="fs-u">' + (o.oshaName ? esc(o.oshaName) : '<span class="fs-ph">タップ</span>') + '</span>', 'fs-ln', isNew) +
+      cell('tantousha', 'cu', '<span class="fs-lbl">御担当者名</span><span class="fs-u">' + (o.tantoushaName ? esc(o.tantoushaName) : '<span class="fs-ph">タップ</span>') + '</span>', 'fs-ln', isNew) +
+      cell('sign', 'cu', o.signature ? '<img alt="サイン" src="' + esc(o.signature) + '">' : '<span class="fs-ph fs-signph">' + (isNew ? 'お客様サイン（現場で取得）' : '✍ ここをタップしてお客様にサインをいただく') + '</span>', 'fs-sig', isNew) +
+      '</div></div>';
+
+    var info = '<div class="fs-row fs-thick fs-info">' +
+      cell('customer', 'adm', '<h5>お客様情報</h5>納品先：' + esc(o.nohinSaki || '—') + '<br>住所：' + esc(o.basho || '—') + '<br>ＴＥＬ：' + esc(o.tel || '—') + '　担当者：' + esc(o.tantou || '—')) +
+      cell('plate', 'wk', '<h5>銘板情報 <span class="fs-hint">📷 写真から読み取れます</span></h5>型式；' + esc(o.katashiki || '—') + '<br>製番；' + esc(o.seiban || '—') + '<br>年月日；' + esc(o.nenGappi || '—') + '<br>最大積載重量；' + esc(o.saidaiSekisai || '—') + '<br>本体重量；' + esc(o.hontaiJuryo || '—')) + '</div>';
+
+    var logo = isLW ? '<img src="' + esc(window.LW_LOGO || '') + '" alt="LINE W" class="fs-logo">' : '<span class="fs-tslogo">TS</span>';
+    var foot = '<div class="fs-co">' + logo + '<div><b>' + esc(paperCo(o.type).name) + '</b><br>' + paperFootText(o.type) + '</div></div>';
+
+    return '<div class="fs-wrap' + (S.fsZoom ? ' zoomed' : '') + '"><div class="fs-paper' + (S.fsGuide === false ? '' : ' guide') + '">' + title +
+      '<div class="fs-frame">' + head + content + table('work') + table('travel') +
+      '<div class="fs-gtotal fs-thick">総時間：' + fmtHM(allW + allT) + '</div>' + approve + info + foot + '</div></div></div>';
+  }
+
+  // 帳票の上：種別・工番・「次の未入力へ」・帳票に載らない項目
+  function viewFormTop(scope) {
+    var o = fsObj(scope), isNew = scope === 'new', isLW = o.type === 'LW';
+    var n = fsEmpties(scope, o).length;
+    var badge = isLW ? '<span class="fs-badge lw">LW工番</span>' : '<span class="fs-badge ts">TS工番</span>';
+    var guideOn = S.fsGuide !== false;
+    var bar = '<div class="fs-bar">' + badge + '<span class="fs-bk">' + esc(o.koban || (isNew ? '新規' : '')) + '</span>' +
+      '<span class="fs-bsp"></span>' +
+      (S.mode === 'mobile' ? '<button' + act('fsZoom') + ' type="button" class="fs-chip' + (S.fsZoom ? ' on' : '') + '">🔍 ' + (S.fsZoom ? '全体表示' : '拡大') + '</button>' : '') +
+      '<button' + act('fsGuide') + ' type="button" class="fs-chip' + (guideOn ? ' on' : '') + '">入力ガイド</button>' +
+      '<button' + act('fsNext') + ' type="button" class="fs-next' + (n ? '' : ' done') + '">' + (n ? '次の未入力へ <span>' + n + '</span>' : '✓ 入力済み') + '</button></div>';
+    var meta;
+    if (isNew) {
+      var chip = function (label, v) { return '<span class="fs-mchip"><b>' + label + '</b>' + (v ? esc(v) : '<i>未入力</i>') + '</span>'; };
+      meta = '<div' + act('fsOpen', { id: 'meta' }) + ' role="button" tabindex="0" class="fs-meta"><div class="fs-mh">帳票に載らない項目（タップで編集）</div><div class="fs-mrow">' +
+        (S.editId ? chip('ステータス', o.status) : '') + chip('工番名', o.kobanName) + (isLW ? chip('納品番号', o.nohinNo) : '') + chip('指示書メモ', o.shijiNaiyou) + '</div></div>';
+    } else {
+      meta = (o.shijiNaiyou || o.kobanName) ? '<div class="fs-meta ro">' + (o.kobanName ? '<div><b>工番名：</b>' + esc(o.kobanName) + '</div>' : '') + (o.shijiNaiyou ? '<div><b>指示メモ：</b>' + esc(o.shijiNaiyou) + '</div>' : '') + '</div>' : '';
+    }
+    var guide = isNew ? '<div class="fs-lead">管理者が分かる範囲で記入し「保存して作業者に渡す」を押すと、案件ストックに入り現場の作業者が続きを記入します。</div>'
+      : '<div class="fs-lead">帳票の枠をタップすると入力できます。黄色の枠が未入力です。</div>';
+    return bar + '<div class="fs-top">' + guide + meta + (isNew && S.nfError ? '<div class="fs-err">工番№・お客様名は必須項目です。</div>' : '') + '</div>';
   }
 
   /* ---------------- NEW / EDIT FORM ---------------- */
   function viewNewForm() {
-    var nf = S.newForm; var draftIsLW = S.draftType === 'LW'; var isEditing = !!S.editId;
-    var draftBadge = draftIsLW ? "font:800 12px 'Noto Sans JP',sans-serif;color:#fff;background:var(--primary);padding:5px 12px;border-radius:8px" : "font:800 12px 'Noto Sans JP',sans-serif;color:var(--primary);background:#fff;border:1.5px solid var(--primary);padding:4px 12px;border-radius:8px";
-    var f = function (name) { return esc(nf[name]); };
-    var input = function (name, ph, type, req) { return '<input class="req"' + chg('nf', { name: name }) + ' value="' + f(name) + '"' + (type ? ' type="' + type + '"' : '') + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' style="' + inpStyle + '">'; };
-    // 工番マスタの候補（datalist）。選択で 納品先/住所/装置名 を自動補完
-    var kobanDatalist = '<datalist id="kobanList">' + (MASTER.kobans || []).map(function (k) {
-      return '<option value="' + esc(k.koban) + '">' + esc([k.nohinSaki, k.kishu].filter(Boolean).join(' / ')) + '</option>';
-    }).join('') + '</datalist>';
-
-    var statusBlock = isEditing ? ('<div style="' + secLabel + '">ステータス</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:18px;display:flex;gap:9px">' +
-      ['未着手', '作業中', '完了'].map(function (st) { var on = nf.status === st; return '<button' + act('setNewStatus', { val: st }) + ' style="flex:1;height:46px;border-radius:11px;cursor:pointer;font:700 14px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--text)') + '">' + st + '</button>'; }).join('') + '</div>') : '';
-
-    var body = '<div style="padding:18px 22px 28px;animation:scin .28s ease both">' +
-      '<div style="display:flex;align-items:center;gap:12px;background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:14px;padding:14px 16px;margin-bottom:18px">' +
-      '<span style="' + draftBadge + '">' + (draftIsLW ? 'LW工番' : 'TS工番') + '</span>' +
-      '<div style="font:600 13px \'Noto Sans JP\',sans-serif;color:var(--text);flex:1">' + esc(draftIsLW ? COMPANY.companyLW : COMPANY.companyTS) + ' の案件として登録します</div>' +
-      (!isEditing ? '<button' + act('goNewType') + ' style="background:none;border:none;color:var(--primary);font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer;text-decoration:underline">変更</button>' : '') + '</div>' +
-      statusBlock +
-      // スタッフ
-      '<div style="' + secLabel + '">作業スタッフ（名前を登録）</div><div style="' + cardStyle + '">' +
-      '<div style="font:500 12px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:4px">現場に行くスタッフを登録します。作業時間・移動時間は現場で各自が入力します。</div>' +
-      '<div style="display:flex;flex-direction:column;gap:10px">' + staffRows('new', nf) + '</div>' +
-      '<button' + act('addNewStaff') + ' style="' + addBtn + '">＋ スタッフを追加</button>' + staffPicker('new') + '</div>' +
-      // 予定
-      '<div style="' + secLabel + '">作業予定・指示メモ</div><div style="' + cardStyle + '">' +
-      '<div><label style="' + labStyle + '">作業予定日</label>' + input('yoteibi', '', 'date') + '</div>' +
-      '<div><label style="' + labStyle + '">指示書メモ（任意）</label><textarea' + chg('nf', { name: 'shijiNaiyou' }) + ' placeholder="作業者への補足メモ" style="' + taSm + '">' + f('shijiNaiyou') + '</textarea></div></div>' +
-      // 工番
-      '<div style="' + secLabel + '">工番情報</div><div style="' + cardStyle + '">' +
-      kobanDatalist +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">工番　№ <span style="color:#c0392b">必須</span></label>' +
-      '<input class="req" list="kobanList"' + chg('nf', { name: 'koban' }) + ' value="' + f('koban') + '" placeholder="' + esc(draftIsLW ? '例：LW25083（入力で候補・自動補完）' : '例：TS26052') + '" style="' + inpStyle + '">' +
-      '<div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-top:5px">工番を選ぶと 納品先・住所・装置名 を自動補完します。</div></div>' +
-      '<div style="flex:1"><label style="' + labStyle + '">元工番</label>' + input('motoKoban', '例：LW24310') + '</div></div>' +
-      '<div><label style="' + labStyle + '">工番名（作業内容の概要）</label>' + input('kobanName', '例：3m切断走行 据付') + '</div></div>' +
-      // お客様
-      '<div style="' + secLabel + '">お客様情報</div><div style="' + cardStyle + '">' +
-      '<div><label style="' + labStyle + '">お客様名 / 納品先 <span style="color:#c0392b">必須</span></label>' + input('nohinSaki', '例：株式会社 赤木鉄工所') + '</div>' +
-      '<div><label style="' + labStyle + '">お客様名 2行目（製造所・ご担当者など）</label>' + input('okyakuSub', '例：稲毛事業所 関') + '</div>' +
-      '<div><label style="' + labStyle + '">住所</label>' + input('basho', '例：宮崎県東諸県郡国富町…') + '</div>' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">ご担当者</label>' + input('tantou', '例：赤木') + '</div>' +
-      '<div style="flex:1"><label style="' + labStyle + '">電話番号（TEL）</label>' + input('tel', '例：0985-00-0000') + '</div></div></div>' +
-      // 機械
-      '<div style="' + secLabel + '">機械・銘板情報</div><div style="' + cardStyle + '">' +
-      '<div><label style="' + labStyle + '">機種</label>' + input('kishu', '例：LN-3000') + '</div>' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">型式</label>' + input('katashiki', '') + '</div>' +
-      '<div style="flex:1"><label style="' + labStyle + '">製番</label>' + input('seiban', '') + '</div></div>' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">銘板 年月日</label>' + input('nenGappi', '', 'month') + '</div>' +
-      (draftIsLW ? '<div style="flex:1"><label style="' + labStyle + '">納品番号</label>' + input('nohinNo', '例：D-1180') + '</div>' : '') + '</div>' +
-      '<div style="display:flex;gap:12px"><div style="flex:1"><label style="' + labStyle + '">最大積載重量</label>' + input('saidaiSekisai', '例：5000kg') + '</div>' +
-      '<div style="flex:1"><label style="' + labStyle + '">本体重量</label>' + input('hontaiJuryo', '例：11500kg') + '</div></div></div>' +
-      // 作業内容(事前)
-      '<div style="' + secLabel + '">作業内容（事前登録）</div><div style="' + cardStyle + '">' +
-      '<div><div style="' + miniLab + '">作業種別（該当を選択・複数可）</div><div style="display:flex;flex-wrap:wrap;gap:9px">' + wtButtons('new', nf) + '</div></div>' +
-      '<div style="display:flex;gap:18px;flex-wrap:wrap"><div><div style="' + miniLab + '">区分</div><div style="display:flex;gap:8px">' + paidButtons('new', nf.paid) + '</div></div></div>' +
-      '<div><div style="font:800 13px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-bottom:7px">【作業内容】<span style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-left:8px">管理者が記入（作業者はこの内容をもとに実施）</span></div><textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-nf-genin"' + chg('nf', { name: 'genin' }) + ' placeholder="実施する作業の内容・指示（事前にわかる範囲で）" style="' + taSm + '">' + f('genin') + '</textarea>' + taCounter('cnt-nf-genin', nf.genin, LIMIT.genin) + '</div>' +
-      '<div><div style="' + miniLab + '">作業終了時の確認事項</div><div style="display:flex;flex-direction:column">' + confirmButtons('new', nf) + '</div></div></div>' +
-      (S.nfError ? '<div style="margin-top:14px;background:#fdecea;border:1px solid #f5c6c0;color:#b03a2e;border-radius:12px;padding:12px 16px;font:600 13px \'Noto Sans JP\',sans-serif">工番№・お客様名は必須項目です。</div>' : '') +
-      '</div>';
-
-    var footer = '<div style="position:sticky;bottom:0;padding:16px 22px;background:linear-gradient(transparent,var(--bg) 55%);display:flex;gap:12px;z-index:5">' +
+    var isEditing = !!S.editId;
+    var footer = '<div style="position:sticky;bottom:0;padding:14px 18px;background:linear-gradient(transparent,var(--bg) 55%);display:flex;gap:12px;z-index:5;pointer-events:none" class="fs-foot">' +
       '<button' + act('goBack') + ' style="flex:none;width:120px;height:56px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer">キャンセル</button>' +
-      '<button' + act('saveCase') + ' style="flex:1;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">' + (isEditing ? '変更を保存' : 'ストックに保存') + '</button></div>';
-
-    return body + footer;
+      '<button' + act('saveCase') + ' style="flex:1;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">' + (isEditing ? '変更を保存' : '保存して作業者に渡す') + '</button></div>';
+    return viewFormTop('new') + viewFormSheet('new') + footer;
   }
 
   /* ---------------- REPORT ---------------- */
   function viewReport() {
-    var r = findCase(S.activeId) || blankForm('LW');
-    var badge = r.type === 'LW' ? "font:800 11.5px 'Noto Sans JP',sans-serif;color:#fff;background:var(--primary);padding:4px 11px;border-radius:8px" : "font:800 11.5px 'Noto Sans JP',sans-serif;color:var(--primary);background:#fff;border:1.5px solid var(--primary);padding:3px 11px;border-radius:8px";
-    var rv = function (name) { return esc(r[name]); };
-    var rinput = function (name, ph, style) { return '<input class="req"' + chg('report', { name: name }) + ' value="' + rv(name) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' style="' + (style || inpSm) + '">'; };
-
-    var orderedStaff = r.staff || [];
-    var multiStaff = orderedStaff.length > 1;
-    var commonNames = orderedStaff.filter(function (st) { return !st.separate; }).map(function (st, i) { return st.name || ('作業者' + (orderedStaff.indexOf(st) + 1)); }).join('・') || '（該当なし）';
-
-    // header info
-    var info = '<div style="background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:14px;padding:13px 16px;margin-bottom:16px">' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="' + badge + '">' + r.type + '工番</span><span style="font:800 15px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(r.koban) + '</span><span style="font:600 13px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-left:auto">' + esc(r.nohinSaki) + ' 様</span></div>' +
-      '<div style="display:flex;flex-wrap:wrap;column-gap:16px;row-gap:3px;font:500 12px \'Noto Sans JP\',sans-serif;color:var(--muted)"><span>元工番 ： ' + esc(r.motoKoban || '—') + '</span><span>機種 ： ' + esc(r.kishu || '—') + '</span><span>製番 ： ' + esc(r.seiban || '—') + '</span></div>' +
-      (r.shijiNaiyou ? '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--primary-tint);font:500 12.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--text)"><b style="color:var(--primary)">指示メモ：</b>' + esc(r.shijiNaiyou) + '</div>' : '') + '</div>';
-
-    var workType = '<div style="' + cardStyle + '"><div style="' + secTitle + '">作業種別 <span style="font-weight:500;color:var(--muted);font-size:12px">（該当を選択・複数可）</span></div><div style="display:flex;flex-wrap:wrap;gap:9px">' + wtButtons('case', r) + '</div></div>';
-
-    var basic = '<div style="' + cardStyle + '"><div style="' + secTitle + '">基本情報</div>' +
-      '<label style="' + labStyle + '">お客様名</label>' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' + rinput('nohinSaki', '', 'flex:1;height:48px;border:1.5px solid var(--border);border-radius:12px;padding:0 14px;font:600 15px \'Noto Sans JP\',sans-serif;color:var(--text)') + '<span style="font:700 15px \'Noto Sans JP\',sans-serif;color:var(--text)">様</span></div>' +
-      rinput('okyakuSub', '2行目：製造所・ご担当者など', 'width:100%;height:46px;border:1.5px solid var(--border);border-radius:12px;padding:0 14px;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:14px') +
-      '<div style="display:flex;gap:18px;flex-wrap:wrap"><div><div style="' + miniLab + '">区分</div><div style="display:flex;gap:8px">' + paidButtons('case', r.paid) + '</div></div></div></div>';
-
-    var staff = '<div style="' + secLabel + '">作業スタッフ</div><div style="' + cardStyle + '">' +
-      '<div style="font:500 12px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted)">現場に行くスタッフを登録します。作業時間・移動時間は下の「作業時間・移動時間」欄で入力します。</div>' +
-      '<div style="display:flex;flex-direction:column;gap:10px">' + staffRows('case', r) + '</div>' +
-      '<button' + act('addStaffCase') + ' style="' + addBtn + '">＋ スタッフを追加</button>' + staffPicker('case') + '</div>';
-
-    var voiceBtn = function (target) { return '<button' + act('openVoice', { target: target }) + ' style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12px \'Noto Sans JP\',sans-serif;cursor:pointer;flex:none">🎤 音声で入力</button>'; };
-    var secRow = function (label, note, target, mt) { return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:' + (mt || 0) + 'px 0 7px"><div><span style="font:800 13.5px \'Noto Sans JP\',sans-serif;color:var(--primary)">' + label + '</span><span style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-left:8px">' + note + '</span></div>' + voiceBtn(target) + '</div>'; };
-    var content = '<div style="' + cardStyle + '"><div style="' + secTitle + '">作業内容</div>' +
-      // 上：【作業内容】＝管理者が記入
-      secRow('【作業内容】', '管理者が記入', 'genin', 0) +
-      '<textarea maxlength="' + LIMIT.genin + '" data-counter="cnt-genin"' + chg('report', { name: 'genin' }) + ' placeholder="実施する作業の内容・指示（管理者）" style="' + taSm + '">' + rv('genin') + '</textarea>' + taCounter('cnt-genin', r.genin, LIMIT.genin) +
-      // 下：【実施内容】＝作業者が記入
-      secRow('【実施内容】', '作業者が記入', 'shori', 14) +
-      '<textarea maxlength="' + LIMIT.shori + '" data-counter="cnt-shori"' + chg('report', { name: 'shori' }) + ' placeholder="実際に行った作業・結果（作業者。音声入力も可）" style="' + taMd + '">' + rv('shori') + '</textarea>' + taCounter('cnt-shori', r.shori, LIMIT.shori) + '</div>';
-
-    var plate = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="' + secTitle + ';margin-bottom:0">銘板情報</div><button' + act('openPlate') + ' style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:9px;font:700 12.5px \'Noto Sans JP\',sans-serif;cursor:pointer">📷 銘板を撮影</button></div>' +
-      '<div style="font:500 11.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:10px">設備の銘板を撮影すると、AIが各項目を自動で読み取ります。</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-      ['機種:kishu', '型式:katashiki', '製番:seiban', '製造年月:nenGappi', '最大積載重量:saidaiSekisai', '本体重量:hontaiJuryo'].map(function (pair) { var kv = pair.split(':'); return '<div><div style="' + miniLab + '">' + kv[0] + '</div><div style="font:700 14px \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(r[kv[1]] || '—') + '</div></div>'; }).join('') + '</div></div>';
-
-    var confirm = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font:700 14px \'Noto Sans JP\',sans-serif;color:var(--text)">作業終了時の確認事項</div><div style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted)">完了「✓」 該当なし「−」</div></div>' +
-      '<div style="font:500 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:8px">作業の最後に上記の確認を行ってください。</div>' +
-      '<div style="display:flex;flex-direction:column">' + confirmButtons('case', r) + '</div></div>';
-
-    var times = viewTimes(r, orderedStaff, multiStaff, commonNames);
-    var approve = viewApprove(r);
-    var kanin = viewKanin(r);
-
-    var body = '<div style="padding:16px 20px 28px;animation:scin .28s ease both">' + info + workType + basic + staff + content + plate + confirm + times + approve + kanin + '</div>';
-    var footer = '<div style="position:sticky;bottom:0;padding:16px 22px;background:linear-gradient(transparent,var(--bg) 55%);display:flex;gap:12px;z-index:5">' +
+    var footer = '<div style="position:sticky;bottom:0;padding:14px 18px;background:linear-gradient(transparent,var(--bg) 55%);display:flex;gap:12px;z-index:5;pointer-events:none" class="fs-foot">' +
       '<button' + act('goHome') + ' style="flex:none;width:90px;height:56px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:14px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">一時保存</button>' +
       '<button' + act('goPreview') + ' style="flex:1;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">PDFで内容を確認 →</button></div>';
-    return body + footer;
-  }
-
-  function timeWorkRow(scope, listKey, e, i, canRemove, si) {
-    var p = { scope: scope, list: listKey, i: i }; if (si !== undefined) { p.si = si; }
-    var chgP = function (field) { var q = {}; for (var k in p) q[k] = p[k]; q.field = field; return q; };
-    return '<div style="display:flex;align-items:center;gap:7px">' +
-      '<input class="req"' + chg('timeRow', chgP('date')) + ' value="' + esc(e.date || '') + '" type="date" style="' + rowDate + '">' +
-      '<input class="req"' + chg('timeRow', chgP('start')) + ' value="' + esc(e.start || '') + '" type="time" style="' + rowTime + '">' +
-      '<span style="font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted)">〜</span>' +
-      '<input class="req"' + chg('timeRow', chgP('end')) + ' value="' + esc(e.end || '') + '" type="time" style="' + rowTime + '">' +
-      '<span style="font:600 11.5px \'Noto Sans JP\',sans-serif;color:var(--muted);width:42px;text-align:right">' + fmtH(diffM(e.start, e.end)) + '</span>' +
-      (canRemove ? '<button' + act('removeTimeRow', p) + ' style="' + rowDel + '">×</button>' : '') + '</div>';
-  }
-  function timeTravelRow(scope, listKey, e, i, canRemove, si) {
-    var p = { scope: scope, list: listKey, i: i }; if (si !== undefined) { p.si = si; }
-    var chgP = function (field) { var q = {}; for (var k in p) q[k] = p[k]; q.field = field; return q; };
-    var dirBtns = ['往路', '現地', '復路'].map(function (d) { var on = (e.dir || '往路') === d; var pp = {}; for (var k in p) pp[k] = p[k]; pp.dir = d; return '<button' + act('setDir', pp) + ' style="height:34px;padding:0 13px;border-radius:9px;cursor:pointer;font:700 12px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--muted)') + '">' + d + '</button>'; }).join('');
-    return '<div style="display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--border);border-radius:11px;background:var(--bg)">' +
-      '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">' + dirBtns + '<input class="req"' + chg('timeRow', chgP('date')) + ' value="' + esc(e.date || '') + '" type="date" style="' + rowDate + ';flex:1;min-width:118px"></div>' +
-      '<div style="display:flex;align-items:center;gap:7px">' +
-      '<input class="req"' + chg('timeRow', chgP('start')) + ' value="' + esc(e.start || '') + '" type="time" style="' + rowTime + '">' +
-      '<span style="font:700 13px \'Noto Sans JP\',sans-serif;color:var(--muted)">〜</span>' +
-      '<input class="req"' + chg('timeRow', chgP('end')) + ' value="' + esc(e.end || '') + '" type="time" style="' + rowTime + '">' +
-      '<div style="display:flex;align-items:center;border:1.5px solid var(--border);border-radius:10px;height:46px;padding:0 10px;flex:1"><input class="req"' + chg('timeRow', chgP('km')) + ' value="' + esc(e.km || '') + '" inputmode="decimal" placeholder="0" style="width:100%;border:none;font:600 14px \'Noto Sans JP\',sans-serif;color:var(--text);text-align:right"><span style="font:600 13px \'Noto Sans JP\',sans-serif;color:var(--muted);margin-left:6px">Km</span></div>' +
-      (canRemove ? '<button' + act('removeTimeRow', p) + ' style="' + rowDel + '">×</button>' : '') + '</div></div>';
+    return viewFormTop('case') + viewFormSheet('case') + footer;
   }
   function sumWork(arr) { var t = 0; (arr || []).forEach(function (row) { var m = diffM(row.start, row.end); if (m) t += m; }); return t; }
 
-  function viewTimes(r, orderedStaff, multiStaff, commonNames) {
-    var modeCard = '';
-    if (multiStaff) {
-      var segStyle = function (on) { return 'height:38px;padding:0 15px;border-radius:9px;cursor:pointer;font:700 12.5px \'Noto Sans JP\',sans-serif;border:1.5px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'var(--primary)' : 'var(--surface)') + ';color:' + (on ? '#fff' : 'var(--muted)') + ''; };
-      modeCard = '<div style="' + cardStyle + '"><div style="' + miniLab + '">行動区分 <span style="font-weight:500">（スタッフごとに「メイン」か「別行動」を選択）</span></div><div style="display:flex;flex-direction:column;gap:9px">' +
-        orderedStaff.map(function (st, si) {
-          return '<div style="display:flex;align-items:center;gap:10px"><span style="flex:1;font:700 13.5px \'Noto Sans JP\',sans-serif;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(st.name || ('作業者' + (si + 1))) + '</span>' +
-            '<div style="display:flex;gap:6px;flex:none"><button' + act('setSeparate', { si: si, val: 'false' }) + ' style="' + segStyle(!st.separate) + '">メイン</button><button' + act('setSeparate', { si: si, val: 'true' }) + ' style="' + segStyle(!!st.separate) + '">別行動</button></div></div>';
-        }).join('') + '</div></div>';
-    }
-
-    var cw = (r.commonWork || []).map(function (e, i) { return timeWorkRow('case', 'commonWork', e, i, (r.commonWork || []).length > 1); }).join('');
-    var ct = (r.commonTravel || []).map(function (e, i) { return timeTravelRow('case', 'commonTravel', e, i, (r.commonTravel || []).length > 1); }).join('');
-    var mainCard = '<div style="' + cardStyle + '"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font:800 13px \'Noto Sans JP\',sans-serif;color:#fff;background:var(--primary);padding:3px 11px;border-radius:8px">メイン</span><span style="font:600 12.5px \'Noto Sans JP\',sans-serif;color:var(--muted)">' + esc(commonNames) + '</span></div>' +
-      '<div style="' + miniLab + '">作業時間 <span style="font-weight:500">（複数日は行を追加）</span></div><div style="display:flex;flex-direction:column;gap:9px">' + cw + '</div>' +
-      '<button' + act('addCommon', { list: 'commonWork' }) + ' style="' + addBtnSm + '">＋ 作業時間</button>' +
-      '<div style="text-align:right;font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-top:2px">作業時間 合計 ： ' + fmtHM(sumWork(r.commonWork)) + '</div>' +
-      '<div style="' + miniLab + ';margin-top:14px">移動時間・距離</div><div style="display:flex;flex-direction:column;gap:9px">' + ct + '</div>' +
-      '<button' + act('addCommon', { list: 'commonTravel' }) + ' style="' + addBtnSm + '">＋ 移動</button>' +
-      '<div style="text-align:right;font:700 12.5px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-top:2px">移動時間 合計 ： ' + fmtHM(sumWork(r.commonTravel)) + '</div></div>';
-
-    var sepBlocks = orderedStaff.map(function (st, si) { return { st: st, si: si }; }).filter(function (x) { return x.st.separate; }).map(function (o) {
-      var st = o.st, si = o.si;
-      var wr = (st.work || []).map(function (e, ri) { return timeWorkRow('case', 'work', e, ri, (st.work || []).length > 1, si); }).join('');
-      var tr = (st.travel || []).map(function (e, ri) { return timeTravelRow('case', 'travel', e, ri, (st.travel || []).length > 1, si); }).join('');
-      return '<div style="background:var(--surface);border:1.5px solid var(--primary);border-radius:16px;padding:16px;margin-bottom:18px;display:flex;flex-direction:column;gap:14px">' +
-        '<div style="display:flex;align-items:center;gap:9px"><span style="font:800 12px \'Noto Sans JP\',sans-serif;color:#fff;background:var(--primary);padding:3px 11px;border-radius:8px">別行動</span><span style="font:700 14.5px \'Noto Sans JP\',sans-serif;color:var(--text);flex:1">' + esc(st.name || ('作業者' + (si + 1))) + '</span><button' + act('cancelSeparate', { si: si }) + ' style="height:34px;padding:0 13px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);border-radius:9px;font:700 12px \'Noto Sans JP\',sans-serif;cursor:pointer">全員と同じに戻す</button></div>' +
-        '<div style="' + miniLab + '">作業時間</div><div style="display:flex;flex-direction:column;gap:9px">' + wr + '</div>' +
-        '<button' + act('addStaffRow', { si: si, which: 'work' }) + ' style="' + addBtnSm + '">＋ 作業時間</button>' +
-        '<div style="text-align:right;font:700 12px \'Noto Sans JP\',sans-serif;color:var(--primary)">作業時間 合計 ： ' + fmtHM(sumWork(st.work)) + '</div>' +
-        '<div style="' + miniLab + ';margin-top:6px">移動時間・距離</div><div style="display:flex;flex-direction:column;gap:9px">' + tr + '</div>' +
-        '<button' + act('addStaffRow', { si: si, which: 'travel' }) + ' style="' + addBtnSm + '">＋ 移動</button>' +
-        '<div style="text-align:right;font:700 12px \'Noto Sans JP\',sans-serif;color:var(--primary)">移動時間 合計 ： ' + fmtHM(sumWork(st.travel)) + '</div></div>';
+  /* ---------------- 入力パネル（ボトムシート） ---------------- */
+  // 工番の候補：その案件の種別（LW/TS）で始まる工番を先に。工番・納入先・受注先・品名で絞り込み。
+  function kobanSuggestHtml(q, type) {
+    var s = String(q || '').trim(), su = s.toUpperCase();
+    var list = (MASTER.kobans || []).filter(function (k) {
+      if (!s) return String(k.koban).toUpperCase().indexOf(type) === 0;
+      return String(k.koban).toUpperCase().indexOf(su) >= 0 || [k.nohinSaki, k.uketsuke, k.kishu].some(function (x) { return x && String(x).indexOf(s) >= 0; });
+    });
+    list.sort(function (a, b) { var ai = String(a.koban).toUpperCase().indexOf(type) === 0 ? 0 : 1, bi = String(b.koban).toUpperCase().indexOf(type) === 0 ? 0 : 1; return ai - bi; });
+    if (!s) list = list.slice(-8).reverse(); else list = list.slice(0, 8);
+    if (!(MASTER.kobans || []).length) return '<div class="fs-none">工番マスターが未取込です（設定画面から取り込めます）。工番は手入力できます。</div>';
+    if (!list.length) return '<div class="fs-none">マスターに該当する工番がありません。そのまま閉じると、工番だけ入ります。</div>';
+    return (s ? '' : '<div class="fs-none">最近の' + type + '工番</div>') + list.map(function (k) {
+      return '<button' + act('fsPickKoban', { k: k.koban }) + ' type="button"><b>' + esc(k.koban) + '</b>' + esc(k.nohinSaki || k.uketsuke || '') + '<br><span>' + esc([k.kishu, k.basho].filter(Boolean).join(' ／ ')) + '</span></button>';
     }).join('');
-
-    var totals = '<div style="' + cardStyle + '"><div style="' + miniLab + '">スタッフ別 作業時間合計</div><div style="display:flex;flex-direction:column;gap:7px">' +
-      orderedStaff.map(function (st) { return '<div style="display:flex;align-items:center;gap:8px;font:600 13px \'Noto Sans JP\',sans-serif;color:var(--text)"><span style="flex:1">' + esc(st.name || '—') + '</span><span style="font:600 10.5px \'Noto Sans JP\',sans-serif;color:var(--muted)">' + (st.separate ? '別行動' : 'メイン') + '</span><span style="color:var(--primary);font-weight:700;width:96px;text-align:right">' + fmtHM(st.separate ? sumWork(st.work) : sumWork(r.commonWork)) + '</span></div>'; }).join('') + '</div></div>';
-
-    return '<div style="' + secLabel + '">作業時間・移動時間</div>' + modeCard + mainCard + sepBlocks + totals;
+  }
+  function applyMasterKoban(scope, code) {
+    var mk = masterKoban(code); if (!mk) return false;
+    silentSet(scope, function (o) {
+      o.koban = mk.koban;
+      if (mk.nohinSaki) o.nohinSaki = mk.nohinSaki;
+      if (mk.basho) o.basho = mk.basho;
+      if (mk.kishu) o.kishu = mk.kishu;
+      return o;
+    });
+    return true;
+  }
+  var DRUM_H = 40;
+  function drumHtml() {
+    var col = function (n) { var s = '<div class="pad"></div><div class="pad"></div>'; for (var i = 0; i < n; i++) s += '<div data-v="' + i + '">' + ('0' + i).slice(-2) + '</div>'; return s + '<div class="pad"></div><div class="pad"></div>'; };
+    return '<div class="fs-drum"><div class="fs-col" id="fs-drum-h">' + col(24) + '</div><span class="fs-colon">:</span><div class="fs-col" id="fs-drum-m">' + col(60) + '</div></div>';
+  }
+  function fsDrumDefault(o, ref, which) {
+    var r = fsRow(o, ref) || {};
+    if (r[which]) return r[which];
+    if (which === 'end' && r.start) return r.start;
+    return which === 'end' ? '17:00' : '08:00';
+  }
+  // ドラムを開いた時刻に合わせ、以降は回したときだけ値を書き込む（開いただけでは入らない）
+  function wireDrum() {
+    var ed = S.edit; if (!ed || String(ed.id).indexOf('row:') !== 0) return;
+    var hc = document.getElementById('fs-drum-h'), mc = document.getElementById('fs-drum-m'); if (!hc || !mc) return;
+    var o = fsObj(ed.scope), ref = fsRowRef(ed.id);
+    var p = fsDrumDefault(o, ref, ed.which || 'start').split(':');
+    var mark = function (c) { var i = Math.round(c.scrollTop / DRUM_H); [].forEach.call(c.querySelectorAll('div[data-v]'), function (x, j) { x.classList.toggle('cur', j === i); }); };
+    hc.scrollTop = (+p[0] || 0) * DRUM_H; mc.scrollTop = (+p[1] || 0) * DRUM_H; mark(hc); mark(mc);
+    var t0 = Date.now();
+    [hc, mc].forEach(function (c) {
+      c.addEventListener('scroll', function () { mark(c); if (Date.now() - t0 < 300) return; commitDrum(); }, { passive: true });
+      c.addEventListener('click', function (e) { var d = e.target.closest('div[data-v]'); if (!d) return; t0 = 0; c.scrollTo({ top: (+d.getAttribute('data-v')) * DRUM_H, behavior: 'smooth' }); });
+    });
+  }
+  function commitDrum() {
+    var ed = S.edit; if (!ed || String(ed.id).indexOf('row:') !== 0) return;
+    var hc = document.getElementById('fs-drum-h'), mc = document.getElementById('fs-drum-m'); if (!hc || !mc) return;
+    var h = Math.max(0, Math.min(23, Math.round(hc.scrollTop / DRUM_H))), m = Math.max(0, Math.min(59, Math.round(mc.scrollTop / DRUM_H)));
+    var v = ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2);
+    fsSetRowField(ed.scope, fsRowRef(ed.id), ed.which || 'start', v);
+    var lab = document.getElementById('fs-tab-' + (ed.which || 'start')); if (lab) lab.textContent = v;
+  }
+  function fsSetRowField(scope, ref, field, val) {
+    silentSet(scope, function (o) {
+      var set = function (arr) { return (arr || []).map(function (row, y) { return y === ref.i ? Object.assign({}, row, wrapKey(field, val)) : row; }); };
+      if (ref.si !== undefined) { var si = +ref.si; o.staff = o.staff.map(function (st, x) { return x === si ? Object.assign({}, st, wrapKey(ref.list, set(st[ref.list]))) : st; }); }
+      else o[ref.list] = set(o[ref.list]);
+      return o;
+    });
+  }
+  // パネル内の入力（data-ed）→ 再描画せずに値を反映
+  function fsInput(el, evType) {
+    var ed = S.edit; if (!ed) return;
+    var f = el.getAttribute('data-ed'), v = el.value;
+    if (f === 'staffName') { var si = +el.getAttribute('data-si'); silentSet(ed.scope, function (o) { o.staff = o.staff.map(function (st, i) { return i === si ? Object.assign({}, st, { name: v }) : st; }); return o; }); return; }
+    if (f === 'kaninName') { silentSet(ed.scope, function (o) { o.kanin = Object.assign({}, o.kanin || {}, { name: v }); return o; }); return; }
+    if (f.indexOf('row.') === 0) { fsSetRowField(ed.scope, fsRowRef(ed.id), f.slice(4), v); return; }
+    silentSet(ed.scope, function (o) { o[f] = v; return o; });
+    // 候補の作り直しは打鍵中(input)だけ。フォーカスが外れた時(change)に作り直すと、押しかけた候補ボタンが消えてタップが効かない
+    if (f === 'koban' && evType === 'input') { var box = document.getElementById('fs-sugg'); if (box) box.innerHTML = kobanSuggestHtml(v, fsObj(ed.scope).type); }
   }
 
-  function viewApprove(r) {
-    var hasSig = !!r.signature;
-    var sigBtn = hasSig
-      ? '<button' + act('goPreview') + ' style="width:100%;border:1.5px solid var(--primary);background:var(--primary-soft);border-radius:14px;padding:10px;cursor:pointer;display:flex;align-items:center;gap:14px"><img src="' + esc(r.signature) + '" alt="サイン" style="height:70px;width:auto;max-width:58%;background:#fff;border-radius:8px"><span style="font:700 13.5px \'Noto Sans JP\',sans-serif;color:var(--primary);margin-left:auto;margin-right:8px">PDFを確認 →</span></button>'
-      : '<button' + act('goPreview') + ' style="width:100%;border:1.5px dashed var(--primary);background:var(--primary-soft);border-radius:14px;padding:14px 16px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px"><span style="font-size:22px;line-height:1;color:var(--primary)">→</span><span style="font:600 13px/1.6 \'Noto Sans JP\',sans-serif;color:var(--primary)">サインは「PDFで内容を確認」画面で、お客様に内容をご説明したうえで取得します。</span></button>';
-    return '<div style="' + cardStyle + '"><div style="font:600 12.5px/1.5 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:12px">上記作業が終了したことを承認します。</div>' +
-      '<div style="display:flex;gap:12px;margin-bottom:16px"><div style="flex:1"><label style="' + labStyle + '">御社名</label><input class="req"' + chg('report', { name: 'oshaName' }) + ' value="' + esc(r.oshaName) + '" style="' + inpSm + '"></div>' +
-      '<div style="flex:1"><label style="' + labStyle + '">御担当者名</label><input class="req"' + chg('report', { name: 'tantoushaName' }) + ' value="' + esc(r.tantoushaName) + '" style="' + inpSm + '"></div></div>' +
-      '<div style="' + miniLab + '">お客様サイン</div>' + sigBtn + '</div>';
+  function renderFsSheet() {
+    var ed = S.edit; if (!ed) return '';
+    var scope = ed.scope, o = fsObj(scope), id = ed.id, isNew = scope === 'new', isLW = o.type === 'LW';
+    var inp = function (f, label, opt) {
+      opt = opt || {};
+      return '<label class="fs-fld"><span>' + label + '</span><input id="fs-in-' + f + '" data-ed="' + f + '" value="' + esc(o[f] || '') + '"' + (opt.type ? ' type="' + opt.type + '"' : '') + (opt.ph ? ' placeholder="' + esc(opt.ph) + '"' : '') + (opt.mode ? ' inputmode="' + opt.mode + '"' : '') + ' autocomplete="off"></label>';
+    };
+    var btns = function (list, cur, action, extra) {
+      return '<div class="fs-opts">' + list.map(function (x) { var p = { val: x }; for (var k in (extra || {})) p[k] = extra[k]; return '<button' + act(action, p) + ' type="button" class="' + (x === cur ? 'on' : '') + '">' + esc(x) + '</button>'; }).join('') + '</div>';
+    };
+    var title = '', sub = '', body = '', hint = function (t) { return '<p class="fs-phint">' + t + '</p>'; };
+
+    if (id === 'koban') {
+      title = '工番 №';
+      body = hint('工番を打つと候補が出ます。選ぶと <b>お客様名（納品先）・住所・機種</b> が自動で入ります。') +
+        inp('koban', '工番', { ph: isLW ? '例：LW25083' : '例：TS26052' }) + '<div class="fs-sugg" id="fs-sugg">' + kobanSuggestHtml(o.koban, o.type) + '</div>';
+    } else if (id === 'okyaku') {
+      title = 'お客様名'; body = inp('nohinSaki', 'お客様名（納品先）', { ph: '例：株式会社 赤木鉄工所' }) + inp('okyakuSub', '2行目（製造所・ご担当者など）', { ph: '例：稲毛事業所 関' });
+    } else if (id === 'kishu') {
+      title = '機種'; body = inp('kishu', '機種', { ph: '例：LN-3000' });
+    } else if (id === 'motoKoban') {
+      title = '元工番'; body = inp('motoKoban', '元工番', { ph: '例：LW24310' });
+    } else if (id === 'date') {
+      title = '作業日'; body = hint('作業予定日を入れます。空欄のときは、作業時間の最初の日付が作業日として印字されます。') + inp('yoteibi', '作業日（作業予定日）', { type: 'date' });
+    } else if (id === 'paid') {
+      title = '区分'; body = btns(['有償', '無償', '調整中'], o.paid, 'setPaid', { scope: scope });
+    } else if (id === 'wt') {
+      title = '作業の種類'; sub = '複数選べます';
+      var wt = o.workTypes || {};
+      body = hint('当てはまるものを選んでください。帳票の表題の文字を直接タップしても切り替わります。') +
+        '<div class="fs-opts">' + WT.map(function (w) { return '<button' + act('toggleWorkType', { scope: scope, key: w }) + ' type="button" class="' + (wt[w] ? 'on' : '') + '">' + w + '</button>'; }).join('') + '</div>';
+    } else if (id === 'genin' || id === 'shori') {
+      var lim = LIMIT[id];
+      title = id === 'genin' ? '【作業内容】' : '【実施内容】'; sub = id === 'genin' ? '管理者が記入' : '作業者が記入';
+      body = hint(id === 'genin' ? '実施する作業の内容・指示を、事前に分かる範囲で書きます。' : '実際に行った作業と結果を書きます。話して入力し、AIで報告書向けの文章に整えることもできます。') +
+        '<div class="fs-tools"><button' + act('fsVoice', { target: id }) + ' type="button" class="mic">🎤 音声で入力・AIで整える</button></div>' +
+        '<textarea id="fs-in-' + id + '" data-ed="' + id + '" maxlength="' + lim + '" data-counter="cnt-fs-' + id + '" placeholder="' + (id === 'genin' ? '例：下記設備の油圧計交換・不具合点検' : '例：油圧計を交換し、動作確認を実施しました。') + '">' + esc(o[id] || '') + '</textarea>' + taCounter('cnt-fs-' + id, o[id], lim);
+    } else if (id === 'staff') {
+      title = '作業者名'; sub = '現場に行く人';
+      var rows = (o.staff || []).map(function (st, si) {
+        var seg = isNew ? '' : '<div class="fs-seg"><button' + act('setSeparate', { si: si, val: 'false' }) + ' type="button" class="' + (!st.separate ? 'on' : '') + '">メイン</button><button' + act('setSeparate', { si: si, val: 'true' }) + ' type="button" class="' + (st.separate ? 'on' : '') + '">別行動</button></div>';
+        return '<div class="fs-srow"><span class="fs-num">' + (si + 1) + '</span><input id="fs-in-staff-' + si + '" data-ed="staffName" data-si="' + si + '" value="' + esc(st.name) + '" placeholder="氏名" autocomplete="off">' + seg +
+          ((o.staff || []).length > 1 ? '<button' + act('removeStaff', { scope: scope, si: si }) + ' type="button" class="fs-x" aria-label="削除">×</button>' : '') + '</div>';
+      }).join('');
+      var totals = isNew ? '' : '<div class="fs-stot"><div class="fs-sh">スタッフ別 作業時間合計</div>' + (o.staff || []).map(function (st) { return '<div><span>' + esc(st.name || '—') + '</span><i>' + (st.separate ? '別行動' : 'メイン') + '</i><b>' + fmtHM(st.separate ? sumWork(st.work) : sumWork(o.commonWork)) + '</b></div>'; }).join('') + '</div>';
+      body = hint(isNew ? '現場に行く人を登録します。作業時間・移動時間は現場で入力します。' : '「別行動」にした人は、作業時間・移動時間を個別に入力できます（それ以外は全員同じ時間で連名）。') +
+        '<div class="fs-slist">' + rows + '</div><button' + act(isNew ? 'addNewStaff' : 'addStaffCase') + ' type="button" class="fs-add">＋ スタッフを追加</button>' + staffPicker(scope) + totals;
+    } else if (id === 'kanin') {
+      var kp = kaninParts(o), stamped = !!(o.kanin && o.kanin.stamped), role = isLW ? '製造部 管理者' : 'TSC 管理者';
+      title = '責任者 確認印'; sub = '電子印';
+      body = hint('作業から戻った報告書を' + role + 'が確認し、電子印を押します。押印するまでクローズはできません（印刷・PDF保存は押印前でも可能）。') +
+        '<label class="fs-fld"><span>' + role + '</span><input id="fs-in-kanin" data-ed="kaninName" value="' + esc(kp.name) + '" placeholder="例：製造部 田中" autocomplete="off"></label>' +
+        '<div class="fs-kstamp">' + (stamped ? '<div class="fs-stamp big"><small>' + esc(kp.dept) + '</small><span>' + esc(kp.person) + '</span></div>' : '<div class="fs-unstamp">未押印</div>') + '</div>' +
+        '<button' + act('toggleStamp', { scope: scope }) + ' type="button" class="fs-stampbtn' + (stamped ? ' off' : '') + '">' + (stamped ? '確認印を取り消す' : '確認印を押す') + '</button>';
+    } else if (id === 'osha') {
+      title = '御社名'; body = inp('oshaName', '御社名');
+    } else if (id === 'tantousha') {
+      title = '御担当者名'; body = inp('tantoushaName', '御担当者名');
+    } else if (id === 'customer') {
+      title = 'お客様情報';
+      body = inp('nohinSaki', '納品先（お客様名と同じ項目です）') + inp('basho', '住所', { ph: '例：宮崎県東諸県郡国富町…' }) + '<div class="fs-two">' + inp('tel', '電話番号（TEL）', { mode: 'tel', ph: '例：0985-00-0000' }) + inp('tantou', 'ご担当者', { ph: '例：赤木' }) + '</div>';
+    } else if (id === 'plate') {
+      title = '銘板情報';
+      body = '<div class="fs-tools"><button' + act('fsPlate') + ' type="button" class="cam">📷 銘板を撮影して読み取る</button></div>' +
+        '<div class="fs-two">' + inp('kishu', '機種') + inp('katashiki', '型式') + inp('seiban', '製番') + inp('nenGappi', '製造年月', { ph: '例：2024-08' }) + inp('saidaiSekisai', '最大積載重量', { ph: '例：5000kg' }) + inp('hontaiJuryo', '本体重量', { ph: '例：11500kg' }) + '</div>';
+    } else if (id === 'meta') {
+      title = '帳票に載らない項目';
+      body = (S.editId ? '<div class="fs-fld"><span>ステータス</span>' + btns(['未着手', '作業中', '完了'], o.status, 'setNewStatus') + '</div>' : '') +
+        inp('kobanName', '工番名（作業内容の概要・一覧に表示）', { ph: '例：3m切断走行 据付' }) + (isLW ? inp('nohinNo', '納品番号', { ph: '例：D-1180' }) : '') +
+        '<label class="fs-fld"><span>指示書メモ（作業者への補足）</span><textarea id="fs-in-shijiNaiyou" data-ed="shijiNaiyou" class="sm" placeholder="作業者への補足メモ">' + esc(o.shijiNaiyou || '') + '</textarea></label>';
+    } else if (id.indexOf('cf:') === 0) {
+      var key = id.slice(3), it = (o.confirmItems || []).filter(function (x) { return x.key === key; })[0] || {};
+      title = '作業終了時の確認事項'; sub = it.label || '';
+      body = hint('「' + esc(it.label || '') + '」の確認結果を選んでください。') + '<div class="fs-opts">' +
+        [['✓', '✓ 完了'], ['−', '－ 該当なし'], ['', '未確認']].map(function (x) { return '<button' + act('fsCfSet', { key: key, val: x[0] }) + ' type="button" class="' + ((it.value || '') === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    } else if (id.indexOf('addrow:') === 0) {
+      var kind = id.slice(7);
+      title = (kind === 'travel' ? '移動時間' : '作業時間') + 'の行を追加'; sub = '誰の行ですか';
+      body = '<div class="fs-opts"><button' + act('fsAddRowFor', { kind: kind, si: '' }) + ' type="button">メイン（' + esc(commonStaff(o).map(function (st) { return st.name; }).filter(Boolean).join('・') || '全員') + '）</button>' +
+        (o.staff || []).map(function (st, si) { return st.separate ? '<button' + act('fsAddRowFor', { kind: kind, si: si }) + ' type="button">' + esc(st.name || ('作業者' + (si + 1))) + '（別行動）</button>' : ''; }).join('') + '</div>';
+    } else if (id.indexOf('row:') === 0) {
+      var ref = fsRowRef(id), r = fsRow(o, ref) || {}, travel = isTravelList(ref.list), which = ed.which || 'start';
+      var arr = fsRowArr(o, ref), m = diffM(r.start, r.end);
+      title = travel ? '移動時間' : '作業時間'; sub = fsRowNames(o, ref);
+      var tab = function (w, label) { return '<button' + act('fsWhich', { w: w }) + ' type="button" class="' + (which === w ? 'on' : '') + '">' + label + ' <b id="fs-tab-' + w + '">' + (esc(r[w]) || '--:--') + '</b></button>'; };
+      body = (travel ? '<div class="fs-fld"><span>区分</span>' + btns(['往路', '現地', '復路'], r.dir || '往路', 'fsDir') + '</div>' : '') +
+        '<div class="fs-two"><label class="fs-fld"><span>日付</span><input id="fs-in-rdate" data-ed="row.date" type="date" value="' + esc(r.date || '') + '"></label>' +
+        (travel ? '<label class="fs-fld"><span>距離（Km）</span><input id="fs-in-rkm" data-ed="row.km" inputmode="decimal" value="' + esc(r.km || '') + '" placeholder="0"></label>' : '<div class="fs-fld"><span>この行の計</span><b class="fs-rtot">' + fmtHM(m) + '</b></div>') + '</div>' +
+        '<div class="fs-fld"><span>時刻（回して選ぶ・数字をタップでも選べます）</span><div class="fs-tabs">' + tab('start', '開始') + tab('end', '終了') + '</div>' + drumHtml() + '</div>' +
+        '<div class="fs-rowacts"><button' + act('fsClearTime') + ' type="button">時刻をクリア</button>' +
+        (arr.length > 1 ? '<button' + act('fsDelRow') + ' type="button" class="del">この行を削除</button>' : '') + '</div>';
+    }
+    return '<div' + act('fsClose') + ' class="fs-scrim"><div' + act('stop') + ' class="fs-sheet" role="dialog" aria-label="' + esc(title) + '"><div class="fs-grab"></div>' +
+      '<div class="fs-shd"><h3>' + esc(title) + '</h3><span>' + esc(sub) + '</span></div>' + body +
+      '<div class="fs-acts"><button' + act('fsClose') + ' type="button">閉じる</button><button' + act('fsNext') + ' type="button" class="pri">次の未入力へ →</button></div></div></div>';
   }
 
-  function viewKanin(r) {
-    var kanin = r.kanin || {}; var stamped = !!kanin.stamped;
-    var name = kanin.name || (r.type === 'LW' ? '製造部 田中' : 'TSC 木下');
-    var roleLabel = r.type === 'LW' ? '製造部 管理者' : 'TSC 管理者';
-    var p = name.split(/\s+/); var dept = p.length > 1 ? p[0] : ''; var person = p.length > 1 ? p.slice(1).join(' ') : name;
-    var stampVisual = stamped
-      ? '<div style="width:74px;height:74px;flex:none;border-radius:50%;border:2.5px solid #c0392b;color:#c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.15;transform:rotate(-6deg)"><span style="font:700 8.5px \'Noto Sans JP\',sans-serif">' + esc(dept) + '</span><span style="font:800 14px \'Noto Sans JP\',sans-serif">' + esc(person) + '</span></div>'
-      : '<div style="width:74px;height:74px;flex:none;border-radius:50%;border:2px dashed #c9ced8;color:#c9ced8;display:flex;align-items:center;justify-content:center;font:700 10px \'Noto Sans JP\',sans-serif">未押印</div>';
-    return '<div style="' + cardStyle + '"><div style="' + secTitle + '">責任者 確認印（電子印）</div>' +
-      '<div style="font:500 12px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted)">作業から戻った報告書を' + roleLabel + 'が確認し、電子印を押します。</div>' +
-      '<div style="display:flex;align-items:center;gap:16px"><div style="flex:1"><label style="' + labStyle + '">' + roleLabel + '</label><input class="req"' + chg('kaninName', { scope: 'case' }) + ' value="' + esc(name) + '" placeholder="責任者名" style="' + inpSm + ';width:100%"></div>' + stampVisual + '</div>' +
-      '<button' + act('toggleStamp', { scope: 'case' }) + ' style="width:100%;height:48px;border:1.5px solid #c0392b;background:' + (stamped ? '#fdecea' : '#c0392b') + ';color:' + (stamped ? '#c0392b' : '#fff') + ';border-radius:12px;font:700 14px \'Noto Sans JP\',sans-serif;cursor:pointer">' + (stamped ? '確認印を取り消す' : '確認印を押す') + '</button></div>';
+  // 帳票の幅(760px)を画面に合わせて縮小（スマホは「拡大」で等倍＋横スクロール）
+  function fitPaper() {
+    var w = document.querySelector('.fs-wrap'), p = document.querySelector('.fs-paper'); if (!w || !p) return;
+    var avail = w.clientWidth - 16;
+    p.style.zoom = (S.fsZoom || avail >= PAPER_W) ? 1 : Math.max(0.3, avail / PAPER_W);
+  }
+  // 次に入力する枠が、下から出る入力パネルに隠れない位置まで帳票をスクロール
+  function scrollToField(id) {
+    var scr = document.querySelector('.scr'); if (!scr) return;
+    var el = scr.querySelector('[data-fsid="' + id + '"]'); if (!el) return;
+    var bar = scr.querySelector('.fs-bar'); // 上に貼り付くツールバーの下に来るように
+    var top = el.getBoundingClientRect().top - scr.getBoundingClientRect().top;
+    scr.scrollTop += top - ((bar ? bar.offsetHeight : 0) + 16);
   }
 
   /* ---------------- SIGN ---------------- */
@@ -725,9 +872,9 @@
       (kStamped ? '<div style="width:50px;height:50px;border-radius:50%;border:2px solid #c0392b;color:#c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.1;transform:rotate(-6deg)"><span style="font:700 6px \'Noto Sans JP\',sans-serif">' + esc(kDept) + '</span><span style="font:800 11px \'Noto Sans JP\',sans-serif">' + esc(kPerson) + '</span></div>'
         : '<div style="width:46px;height:46px;border-radius:50%;border:1px solid #ccc;color:#bbb;display:flex;align-items:center;justify-content:center;font:700 7px \'Noto Sans JP\',sans-serif">印</div>');
 
-    var logo = isLW ? '<img src="' + (window.LW_LOGO || '') + '" alt="LINE W" style="height:42px;width:auto">' : '<span style="font:900 16px \'Noto Sans JP\',sans-serif;letter-spacing:.12em">' + esc(COMPANY.companyTS) + '</span>';
-    var footerCompany = isLW ? '株式会社 ラインワークス' : COMPANY.companyTS;
-    var recipient = isLW ? '株式会社 ラインワークス' : COMPANY.companyTS;
+    var logo = isLW ? '<img src="' + esc(window.LW_LOGO || '') + '" alt="LINE W" style="height:42px;width:auto">' : '<span style="font:italic 900 22px \'Noto Sans JP\',sans-serif;letter-spacing:.02em">TS</span>';
+    var footerCompany = paperCo(r.type).name;
+    var recipient = paperCo(r.type).name;
 
     var sheet = '<div id="pdf-print" style="background:#fff;box-shadow:0 10px 30px rgba(16,24,40,.18);margin:0 auto;width:100%;max-width:600px;padding:22px 22px 26px;font-family:\'Noto Sans JP\',sans-serif;color:#111">' +
       '<div style="text-align:center;font:900 17px/1.3 \'Noto Sans JP\',sans-serif;margin-bottom:8px">' + titleTypes + '<span style="margin-left:2px">作業書</span></div>' +
@@ -764,7 +911,7 @@
       '<div style="display:flex;border-bottom:2px solid #111;font:600 9px \'Noto Sans JP\',sans-serif"><div style="flex:1;border-right:1px solid #111;padding:6px 8px"><div style="font:700 9px \'Noto Sans JP\',sans-serif;margin-bottom:3px">お客様情報</div><div style="color:#333;line-height:1.7">納品先：' + esc(r.nohinSaki || '—') + '<br>住所：' + esc(r.basho || '—') + '<br>ＴＥＬ：' + esc(r.tel || '—') + '　担当者：' + esc(r.tantou || '—') + '</div></div>' +
       '<div style="width:240px;padding:6px 8px"><div style="font:700 9px \'Noto Sans JP\',sans-serif;margin-bottom:3px">銘板情報</div><div style="color:#333;line-height:1.7">型式；' + esc(r.katashiki || '—') + '<br>製番；' + esc(r.seiban || '—') + '<br>年月日；' + esc(r.nenGappi || '—') + '<br>最大積載重量；' + esc(r.saidaiSekisai || '—') + '<br>本体重量；' + esc(r.hontaiJuryo || '—') + '</div></div></div>' +
       // footer
-      '<div style="display:flex;align-items:center;padding:8px 10px;gap:12px">' + logo + '<div style="font:600 8.5px/1.6 \'Noto Sans JP\',sans-serif;color:#222"><div style="font-weight:700;font-size:10px">' + esc(footerCompany) + '</div>〒262-0012　千葉県千葉市花見川区千種町53<br>Tel 043-250-0165 ／ Fax 043-257-9488</div></div>' +
+      '<div style="display:flex;align-items:center;padding:8px 10px;gap:12px">' + logo + '<div style="font:600 8.5px/1.6 \'Noto Sans JP\',sans-serif;color:#222"><div style="font-weight:700;font-size:10px">' + esc(footerCompany) + '</div>' + paperFootText(r.type) + '</div></div>' +
       '</div></div>';
 
     var sigBadge = r.signature ? '<div style="max-width:600px;margin:0 auto 12px;background:#e7f4ec;border:1.5px solid #1c7a45;border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px"><span style="width:24px;height:24px;flex:none;border-radius:50%;background:#1c7a45;color:#fff;font:800 13px \'Noto Sans JP\',sans-serif;display:flex;align-items:center;justify-content:center">✓</span><div style="font:700 13px \'Noto Sans JP\',sans-serif;color:#1c5635;flex:1">サインを取得済み</div><button' + act('goSign') + ' style="height:34px;padding:0 13px;border:1.5px solid #1c7a45;background:#fff;color:#1c7a45;border-radius:9px;font:700 12px \'Noto Sans JP\',sans-serif;cursor:pointer">取り直す</button></div>' : '';
@@ -890,6 +1037,7 @@
         '<button' + act('menuDelete') + ' style="width:100%;height:56px;border:1.5px solid #f2c4bd;background:#fdecea;color:#b03a2e;border-radius:14px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer;margin-bottom:14px">削除する</button>' +
         '<button' + act('closeMenu') + ' style="width:100%;height:52px;border:none;background:var(--bg);color:var(--muted);border-radius:14px;font:700 15px \'Noto Sans JP\',sans-serif;cursor:pointer">キャンセル</button></div></div>';
     }
+    if (S.edit) out += renderFsSheet();
     if (S.voiceOpen) out += renderVoice();
     if (S.plateOpen) out += renderPlate();
     if (S.closingId) {
@@ -968,8 +1116,8 @@
   /* ==================================================================
    * ACTIONS
    * ================================================================== */
-  function nav(screen) { setState(function (s) { return { history: s.history.concat([s.screen]), screen: screen, settingsSaved: false }; }); }
-  function pushNav(screen) { setState(function (s) { return { history: s.history.concat([s.screen]), screen: screen }; }); }
+  function nav(screen) { setState(function (s) { return { history: s.history.concat([s.screen]), screen: screen, settingsSaved: false, edit: null }; }); }
+  function pushNav(screen) { setState(function (s) { return { history: s.history.concat([s.screen]), screen: screen, edit: null }; }); }
 
   function mutateCase(fn) {
     setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === s.activeId ? fn(Object.assign({}, c)) : c; }) }; });
@@ -977,12 +1125,12 @@
   function mutate(scope, fn) { if (scope === 'new') setState(function (s) { return { newForm: fn(Object.assign({}, s.newForm)) }; }); else mutateCase(fn); }
 
   var ACTIONS = {
-    goBack: function () { var fromReport = S.screen === 'report'; setState(function (s) { var h = s.history.slice(); var prev = h.pop() || 'home'; return { history: h, screen: prev }; }); if (fromReport) persistActive().then(function () { return reloadState(); }).catch(function (e) { toast(errMsg(e), true); }); },
+    goBack: function () { var fromReport = S.screen === 'report'; setState(function (s) { var h = s.history.slice(); var prev = h.pop() || 'home'; return { history: h, screen: prev, edit: null }; }); if (fromReport) persistActive().then(function () { return reloadState(); }).catch(function (e) { toast(errMsg(e), true); }); },
     // report の「一時保存」：アクティブ案件をサーバー保存してからトップへ
     goHome: function () {
       var fromReport = S.screen === 'report';
-      if (fromReport) { setBusy(true); persistActive().then(function () { return reloadState(); }).then(function () { setState({ screen: 'home', history: [] }); toast('保存しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); }
-      else { setState({ screen: 'home', history: [] }); }
+      if (fromReport) { S.edit = null; setBusy(true); persistActive().then(function () { return reloadState(); }).then(function () { setState({ screen: 'home', history: [] }); toast('保存しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); }
+      else { setState({ screen: 'home', history: [], edit: null }); }
     },
     goSettings: function () { nav('settings'); },
     goHistory: function () { nav('history'); loadHistory(); },
@@ -999,22 +1147,22 @@
     },
     // メール送信画面へ。プレビュー(#pdf-print)がある間にPDFを用意してから遷移（添付用）
     goSend: function () {
-      var doNav = function () { setState(function (s) { return { history: s.history.concat([s.screen]), screen: 'send', sent: false }; }); };
+      var doNav = function () { setState(function (s) { return { history: s.history.concat([s.screen]), screen: 'send', sent: false, edit: null }; }); };
       if (document.getElementById('pdf-print')) { setBusy(true); savePdfBackup().then(function () { setState({ busy: false }); doNav(); }); }
       else { doNav(); }
     },
-    finishToHome: function () { setState({ screen: 'home', history: [], sent: false }); reloadState(); },
+    finishToHome: function () { setState({ screen: 'home', history: [], sent: false, edit: null }); reloadState(); },
     setFilter: function (d) { setState({ filter: d.val }); },
     setHistType: function (d) { setState({ histType: d.val }); loadHistory(); },
     clearHistQuery: function () { setState({ histQuery: '', histType: 'all' }); loadHistory(); },
-    pickLW: function () { setState(function (s) { return { draftType: 'LW', editId: null, newForm: blankForm('LW'), nfError: false, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
-    pickTS: function () { setState(function (s) { return { draftType: 'TS', editId: null, newForm: blankForm('TS'), nfError: false, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
+    pickLW: function () { setState(function (s) { return { draftType: 'LW', editId: null, newForm: blankForm('LW'), nfError: false, edit: null, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
+    pickTS: function () { setState(function (s) { return { draftType: 'TS', editId: null, newForm: blankForm('TS'), nfError: false, edit: null, history: s.history.concat(['newType']), screen: 'newForm' }; }); },
     setNewStatus: function (d) { setState(function (s) { return { newForm: Object.assign({}, s.newForm, { status: d.val }) }; }); },
-    openCase: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat([s.screen]), screen: 'report' }; }); patchCaseSignature(d.id); },
+    openCase: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat([s.screen]), screen: 'report', edit: null }; }); patchCaseSignature(d.id); },
     openMenu: function (d) { setState({ menuId: d.id }); },
     closeMenu: function () { setState({ menuId: null }); },
     stop: function (e) { if (e) e.stopPropagation(); },
-    menuEdit: function () { var id = S.menuId; var c = findCase(id); if (!c) return; setState(function (s) { return { editId: id, draftType: c.type, newForm: JSON.parse(JSON.stringify(c)), menuId: null, nfError: false, history: s.history.concat(['home']), screen: 'newForm' }; }); },
+    menuEdit: function () { var id = S.menuId; var c = findCase(id); if (!c) return; setState(function (s) { return { editId: id, draftType: c.type, newForm: JSON.parse(JSON.stringify(c)), menuId: null, nfError: false, edit: null, history: s.history.concat(['home']), screen: 'newForm' }; }); },
     menuDup: function () { var id = S.menuId; setState({ menuId: null }); setBusy(true); server('duplicateCase', id).then(function () { return reloadState(); }).then(function () { toast('複製しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); },
     menuDelete: function () { var id = S.menuId; setState({ menuId: null }); setBusy(true); server('deleteCase', id).then(function () { return reloadState(); }).then(function () { toast('削除しました'); }).catch(function (e) { setBusy(false); toast(errMsg(e), true); }); },
     // 名簿から作業員を追加（空行があれば埋める、なければ追加）
@@ -1056,15 +1204,11 @@
     cycleConfirm: function (d) { var order = ['', '✓', '−']; mutate(d.scope, function (o) { return Object.assign({}, o, { confirmItems: o.confirmItems.map(function (it) { return it.key === d.key ? Object.assign({}, it, { value: order[(order.indexOf(it.value) + 1) % 3] }) : it; }) }); }); },
     toggleStamp: function (d) { mutate(d.scope, function (o) { var on = !(o.kanin && o.kanin.stamped); var name = (o.kanin && o.kanin.name) || (o.type === 'LW' ? '製造部 田中' : 'TSC 木下'); return Object.assign({}, o, { kanin: { stamped: on, name: name } }); }); },
     // time rows
-    addCommon: function (d) { mutate('case', function (o) { var blank = d.list === 'commonWork' ? { date: o.yoteibi || TODAY, start: '', end: '' } : { dir: '往路', date: o.yoteibi || TODAY, start: '', end: '', km: '' }; var arr = (o[d.list] || []).concat([blank]); var p = {}; p[d.list] = arr; return Object.assign({}, o, p); }); },
     removeTimeRow: function (d) {
       var i = +d.i;
       if (d.si !== undefined) { var si = +d.si, which = d.list; mutate('case', function (o) { return Object.assign({}, o, { staff: o.staff.map(function (st, x) { if (x !== si) return st; var arr = st[which] || []; return Object.assign({}, st, wrapKey(which, arr.length > 1 ? arr.filter(function (_, y) { return y !== i; }) : arr)); }) }); }); }
       else { mutate('case', function (o) { var arr = o[d.list] || []; var p = {}; p[d.list] = arr.length > 1 ? arr.filter(function (_, x) { return x !== i; }) : arr; return Object.assign({}, o, p); }); }
     },
-    setDir: function (d) { updateTime(d, 'dir', d.dir); },
-    addStaffRow: function (d) { var si = +d.si, which = d.which; mutate('case', function (o) { return Object.assign({}, o, { staff: o.staff.map(function (st, x) { if (x !== si) return st; var blank = which === 'work' ? { date: o.yoteibi || TODAY, start: '', end: '' } : { dir: '往路', date: o.yoteibi || TODAY, start: '', end: '', km: '' }; return Object.assign({}, st, wrapKey(which, (st[which] || []).concat([blank]))); }) }); }); },
-    cancelSeparate: function (d) { var si = +d.si; setSeparateFn(si, false); },
     setSeparate: function (d) { var si = +d.si; setSeparateFn(si, d.val === 'true'); },
     // signature
     clearSig: function () { var c = document.getElementById('sigpad'); if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); },
@@ -1083,7 +1227,8 @@
     // save / close / send
     saveCase: function () {
       var f = S.newForm;
-      if (!String(f.koban).trim() || !String(f.nohinSaki).trim()) { setState({ nfError: true }); return; }
+      if (!String(f.koban).trim() || !String(f.nohinSaki).trim()) { var miss = !String(f.koban).trim() ? 'koban' : 'okyaku'; setState({ nfError: true, edit: { id: miss, scope: 'new', which: 'start', orig: f.koban }, fsScrollTo: miss }); return; }
+      S.edit = null;
       var wasEdit = !!S.editId;
       setBusy(true);
       server('saveCase', f).then(function () { return reloadState(); }).then(function () {
@@ -1124,10 +1269,10 @@
       }).catch(function (e) { setBusy(false); toast(errMsg(e), true); });
     },
     printPdf: function () { doPrint(); },
-    openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview' }; }); patchCaseSignature(d.id); },
+    openHistory: function (d) { setState(function (s) { return { activeId: d.id, history: s.history.concat(['history']), screen: 'preview', edit: null }; }); patchCaseSignature(d.id); },
     // voice (mock; S6 で Gemini 実装)
     setVStyle: function (d) { setState({ vStyle: d.val }); },
-    openVoice: function (d) { setState({ voiceOpen: true, vTarget: (d && d.target) || 'shori', vRaw: '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false, vStyle: S.vStyle || 'auto' }); },
+    openVoice: function (d) { setState({ voiceOpen: true, vTarget: (d && d.target) || 'shori', vScope: (d && d.scope) || 'case', vRaw: (d && d.prefill) || '', vInterim: '', vResult: '', vError: '', vProcessing: false, vListening: false, vStyle: S.vStyle || 'auto' }); },
     closeVoice: function () { stopRec(); setState({ voiceOpen: false, vListening: false }); },
     toggleListen: function () { toggleListen(); },
     // やり直す＝音声入力からやり直し（整形結果と認識テキストを消して録音画面へ戻す）
@@ -1152,18 +1297,18 @@
       if (!res) { setState({ voiceOpen: false, vListening: false }); return; }
       var truncated = volume(res) > lim;
       var capped = capVolume(res, lim);
-      mutateCase(function (o) { var patch = {}; patch[tgt] = capped; return Object.assign({}, o, patch); });
+      mutate(S.vScope || 'case', function (o) { var patch = {}; patch[tgt] = capped; return Object.assign({}, o, patch); });
       setState({ voiceOpen: false, vListening: false });
       var lbl = tgt === 'genin' ? '作業内容' : '実施内容';
       toast(truncated ? (lbl + 'に反映しました（上限のため一部省略）') : (lbl + 'に反映しました'));
     },
     // plate (mock; S6 で Gemini Vision 実装)
-    openPlate: function () { setState({ plateOpen: true, plateImg: '', plateProcessing: false, plateResult: null }); },
+    openPlate: function (d) { setState({ plateOpen: true, plateScope: (d && d.scope) || 'case', plateImg: '', plateProcessing: false, plateResult: null }); },
     closePlate: function () { setState({ plateOpen: false }); },
     aiReadPlate: function () {
       if (!S.plateImg) return;
       setState({ plateProcessing: true, plateResult: null });
-      var mockPlate = function () { var c = findCase(S.activeId) || {}; return { kishu: c.kishu || 'LN-3000', katashiki: c.katashiki || 'CT-3000', seiban: c.seiban || '25-0083', nenGappi: c.nenGappi || '2025-03', saidaiSekisai: c.saidaiSekisai || '5000kg', hontaiJuryo: c.hontaiJuryo || '11500kg' }; };
+      var mockPlate = function () { var c = fsObj(S.plateScope || 'case') || {}; return { kishu: c.kishu || 'LN-3000', katashiki: c.katashiki || 'CT-3000', seiban: c.seiban || '25-0083', nenGappi: c.nenGappi || '2025-03', saidaiSekisai: c.saidaiSekisai || '5000kg', hontaiJuryo: c.hontaiJuryo || '11500kg' }; };
       if (!BOOT.geminiEnabled) { setTimeout(function () { setState({ plateProcessing: false, plateResult: mockPlate() }); }, 900); return; }
       downscaleDataUrl(S.plateImg, 1600).then(function (small) {
         return server('aiReadPlate', small);
@@ -1174,7 +1319,82 @@
         toast('銘板のAI読み取りに失敗したため暫定値を表示しました：' + errMsg(e), true);
       });
     },
-    applyPlate: function () { var res = S.plateResult, id = S.activeId; if (res && id) { setState(function (s) { return { cases: s.cases.map(function (c) { return c.id === id ? Object.assign({}, c, { kishu: res.kishu, katashiki: res.katashiki, seiban: res.seiban, nenGappi: res.nenGappi, saidaiSekisai: res.saidaiSekisai, hontaiJuryo: res.hontaiJuryo }) : c; }), plateOpen: false }; }); } else ACTIONS.closePlate(); }
+    applyPlate: function () {
+      var res = S.plateResult; if (!res) { ACTIONS.closePlate(); return; }
+      S.plateOpen = false;
+      mutate(S.plateScope || 'case', function (c) { return Object.assign({}, c, { kishu: res.kishu, katashiki: res.katashiki, seiban: res.seiban, nenGappi: res.nenGappi, saidaiSekisai: res.saidaiSekisai, hontaiJuryo: res.hontaiJuryo }); });
+    },
+
+    /* ---------- 帳票型入力 ---------- */
+    fsOpen: function (d) {
+      var scope = fsScope(), id = d.id;
+      if (id === 'sign') { // お客様サインはサイン画面で取得（編集中の内容を保存してから）
+        if (scope !== 'case') return;
+        persistActive().catch(function (e) { toast(errMsg(e), true); });
+        nav('sign'); return;
+      }
+      // 時間の行を開いたとき日付が空なら、作業日（なければ今日）を入れておく
+      if (String(id).indexOf('row:') === 0) { var o0 = fsObj(scope), ref0 = fsRowRef(id), r0 = fsRow(o0, ref0); if (r0 && !r0.date) fsSetRowField(scope, ref0, 'date', workDate(o0) || TODAY); }
+      setState({ edit: { id: id, scope: scope, which: 'start', orig: fsObj(scope).koban }, fsScrollTo: id });
+    },
+    // 閉じる：工番を変えていたらマスターから お客様名・住所・機種 を補完
+    fsClose: function () {
+      var ed = S.edit; if (!ed) return;
+      if (ed.id === 'koban') { var k = fsObj(ed.scope).koban; if (k !== ed.orig && applyMasterKoban(ed.scope, k)) toast('工番マスターから お客様名・住所・機種 を入れました'); }
+      setState({ edit: null, nfError: false });
+    },
+    // 次の未入力へ（Excel の Tab のように、帳票の上から順に未入力の枠を開く）
+    fsNext: function () {
+      var ed = S.edit, scope = ed ? ed.scope : fsScope();
+      if (ed && ed.id === 'koban') { var k = fsObj(scope).koban; if (k !== ed.orig && applyMasterKoban(scope, k)) toast('工番マスターから お客様名・住所・機種 を入れました'); }
+      var L = fsEmpties(scope, fsObj(scope));
+      var cur = ed ? L.indexOf(ed.id) : -1;
+      var next = cur >= 0 ? L[cur + 1] : L.filter(function (x) { return !ed || x !== ed.id; })[0];
+      if (!next) { setState({ edit: null }); toast(L.length ? '残りの未入力はこの欄だけです' : 'すべて入力済みです'); return; }
+      ACTIONS.fsOpen({ id: next });
+    },
+    fsGuide: function () { setState({ fsGuide: S.fsGuide === false }); },
+    fsZoom: function () { setState({ fsZoom: !S.fsZoom }); },
+    fsWT: function (d) { ACTIONS.toggleWorkType({ scope: fsScope(), key: d.key }); },
+    fsCf: function (d) { ACTIONS.cycleConfirm({ scope: fsScope(), key: d.key }); },
+    fsCfSet: function (d) { var ed = S.edit; if (!ed) return; mutate(ed.scope, function (o) { return Object.assign({}, o, { confirmItems: o.confirmItems.map(function (it) { return it.key === d.key ? Object.assign({}, it, { value: d.val }) : it; }) }); }); },
+    fsPickKoban: function (d) {
+      var ed = S.edit; if (!ed) return;
+      applyMasterKoban(ed.scope, d.k);
+      setState({ edit: null, nfError: false });
+      toast('工番マスターから お客様名・住所・機種 を入れました');
+    },
+    fsWhich: function (d) { var ed = S.edit; if (!ed) return; setState({ edit: Object.assign({}, ed, { which: d.w }) }); },
+    fsDir: function (d) { var ed = S.edit; if (!ed) return; fsSetRowField(ed.scope, fsRowRef(ed.id), 'dir', d.val); render(); },
+    fsClearTime: function () { var ed = S.edit; if (!ed) return; var ref = fsRowRef(ed.id); fsSetRowField(ed.scope, ref, 'start', ''); fsSetRowField(ed.scope, ref, 'end', ''); render(); },
+    fsDelRow: function () {
+      var ed = S.edit; if (!ed) return; var ref = fsRowRef(ed.id);
+      S.edit = null;
+      ACTIONS.removeTimeRow(ref.si !== undefined ? { list: ref.list, i: ref.i, si: ref.si } : { list: ref.list, i: ref.i });
+    },
+    // 行の追加：別行動の人がいれば「誰の行か」を聞く
+    fsAddRow: function (d) {
+      var o = fsObj('case');
+      if ((o.staff || []).some(function (st) { return st.separate; })) { setState({ edit: { id: 'addrow:' + d.kind, scope: 'case', which: 'start' } }); return; }
+      ACTIONS.fsAddRowFor({ kind: d.kind, si: '' });
+    },
+    fsAddRowFor: function (d) {
+      var travel = d.kind === 'travel', sep = d.si !== '' && d.si !== undefined;
+      var o = fsObj('case');
+      var blank = travel ? { dir: '往路', date: o.yoteibi || TODAY, start: '', end: '', km: '' } : { date: o.yoteibi || TODAY, start: '', end: '' };
+      var list = sep ? (travel ? 'travel' : 'work') : (travel ? 'commonTravel' : 'commonWork');
+      var idx;
+      silentSet('case', function (c) {
+        if (sep) { var si = +d.si; c.staff = c.staff.map(function (st, x) { if (x !== si) return st; idx = (st[list] || []).length; return Object.assign({}, st, wrapKey(list, (st[list] || []).concat([blank]))); }); }
+        else { idx = (c[list] || []).length; c[list] = (c[list] || []).concat([blank]); }
+        return c;
+      });
+      ACTIONS.fsOpen({ id: 'row:' + list + ':' + idx + (sep ? ':' + d.si : '') });
+    },
+    // 文章欄の音声入力（今の文章を下書きとして渡し、AIで整えて置き換える）
+    fsVoice: function (d) { var ed = S.edit; if (!ed) return; var o = fsObj(ed.scope); S.edit = null; ACTIONS.openVoice({ target: d.target, scope: ed.scope, prefill: o[d.target] || '' }); },
+    fsPlate: function () { var ed = S.edit; if (!ed) return; S.edit = null; ACTIONS.openPlate({ scope: ed.scope }); },
+
   };
 
   function wrapKey(k, v) { var o = {}; o[k] = v; return o; }
@@ -1183,34 +1403,9 @@
       return Object.assign({}, o, { staff: o.staff.map(function (st, i) { if (i !== si) return st; var work = (st.work && st.work.length) ? st.work : [{ date: o.yoteibi || TODAY, start: '', end: '' }]; var travel = (st.travel && st.travel.length) ? st.travel : [{ dir: '往路', date: o.yoteibi || TODAY, start: '', end: '', km: '' }]; return Object.assign({}, st, { separate: val, work: work, travel: travel }); }) });
     });
   }
-  function updateTime(d, field, val) {
-    var i = +d.i;
-    if (d.si !== undefined) { var si = +d.si, which = d.list; mutate('case', function (o) { return Object.assign({}, o, { staff: o.staff.map(function (st, x) { if (x !== si) return st; return Object.assign({}, st, wrapKey(which, (st[which] || []).map(function (row, y) { return y === i ? Object.assign({}, row, wrapKey(field, val)) : row; }))); }) }); }); }
-    else { mutate('case', function (o) { var arr = o[d.list] || []; return Object.assign({}, o, wrapKey(d.list, arr.map(function (row, x) { return x === i ? Object.assign({}, row, wrapKey(field, val)) : row; }))); }); }
-  }
-
   /* ---------------- change dispatch ---------------- */
   var CHANGES = {
-    nf: function (d, val) {
-      setState(function (s) {
-        var patch = wrapKey(d.name, val);
-        // 工番選択で 納品先/住所/装置名 を自動補完（マスターに値がある項目のみ上書き）
-        if (d.name === 'koban') {
-          var mk = masterKoban(val);
-          if (mk) {
-            if (mk.nohinSaki) patch.nohinSaki = mk.nohinSaki;
-            if (mk.basho) patch.basho = mk.basho;
-            if (mk.kishu) patch.kishu = mk.kishu;
-          }
-        }
-        return { newForm: Object.assign({}, s.newForm, patch), nfError: false };
-      });
-    },
-    report: function (d, val) { mutateCase(function (o) { return Object.assign({}, o, wrapKey(d.name, val)); }); },
     settings: function (d, val) { setState(function (s) { return { settings: Object.assign({}, s.settings, wrapKey(d.name, val)), settingsSaved: false }; }); },
-    staffName: function (d, val) { var si = +d.si; mutate(d.scope, function (o) { return Object.assign({}, o, { staff: o.staff.map(function (st, i) { return i === si ? Object.assign({}, st, { name: val }) : st; }) }); }); },
-    kaninName: function (d, val) { mutate(d.scope, function (o) { return Object.assign({}, o, { kanin: Object.assign({}, o.kanin || {}, { name: val }) }); }); },
-    timeRow: function (d, val) { updateTime(d, d.field, val); },
     histQuery: function (d, val) { setState({ histQuery: val }); loadHistory(); },
     pickDept: function (d, val) { setState({ pickDept: val }); },
     addStaffFromMaster: function (d, val) { ACTIONS.addStaffFromMaster({ scope: d.scope, val: val }); },
@@ -1234,6 +1429,13 @@
     var fn = CHANGES[name]; if (!fn) return;
     fn(datasetOf(el), el.value, el);
   });
+  // 帳票の枠（role=button の div）もキーボードの Enter / Space で開けるように。Esc で入力パネルを閉じる
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && S.edit) { ACTIONS.fsClose(); return; }
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var el = e.target; if (!el || !el.getAttribute || el.getAttribute('role') !== 'button' || !el.getAttribute('data-act')) return;
+    e.preventDefault(); el.click();
+  });
   // 文字数カウンタの live 更新（再描画なしでカウンタだけ書き換え、フォーカス維持）
   document.addEventListener('input', function (e) {
     var el = e.target; if (!el || !el.getAttribute) return;
@@ -1245,6 +1447,10 @@
     var vol = volume(v);
     c.textContent = vol + ' / ' + max; c.style.color = vol >= max ? '#c0392b' : '';
   });
+  // 入力パネル内の入力を即時反映（描き直さない）。日付欄は change でも拾う
+  function onEdInput(e) { var el = e.target; if (el && el.getAttribute && el.getAttribute('data-ed')) fsInput(el, e.type); }
+  document.addEventListener('input', onEdInput);
+  document.addEventListener('change', onEdInput);
   function datasetOf(el) { var d = {}; for (var i = 0; i < el.attributes.length; i++) { var a = el.attributes[i]; if (a.name.indexOf('data-') === 0 && a.name !== 'data-act' && a.name !== 'data-chg') d[a.name.slice(5)] = a.value; } return d; }
 
   /* ---------------- signature canvas ---------------- */
@@ -1419,7 +1625,7 @@
   }
 
   /* ---------------- boot ---------------- */
-  function onResize() { var m = computeMode(); if (m !== S.mode) setState({ mode: m }); }
+  function onResize() { var m = computeMode(); if (m !== S.mode) setState({ mode: m }); else fitPaper(); }
   window.addEventListener('resize', onResize);
   S.mode = computeMode();
   render();

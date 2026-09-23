@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link href="/styles.css" rel="stylesheet">
+  <link href="/styles.css?v=20260923" rel="stylesheet">
 </head>
 <body>
   <div id="root"></div>
@@ -20,7 +20,7 @@
   <script>
     fetch('/api/boot').then(function (r) { return r.json(); }).then(function (b) {
       window.BOOT = b;
-      var s = document.createElement('script'); s.src = '/app.js'; document.body.appendChild(s);
+      var s = document.createElement('script'); s.src = '/app.js?v=20260923'; document.body.appendChild(s);
     }).catch(function (e) {
       document.getElementById('root').textContent = '起動に失敗しました: ' + e;
     });

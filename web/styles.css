@@ -14,6 +14,207 @@
   .portal-btn:active{opacity:.92}
   @keyframes scin{from{transform:translateY(6px);opacity:.4}to{transform:none;opacity:1}}
   @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ===== 帳票型入力：仕上がりのPDFと同じ枠をタップして入力する ===== */
+  .fs-bar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border)}
+  .fs-badge{font:800 12px 'Noto Sans JP',sans-serif;padding:4px 10px;border-radius:8px;letter-spacing:.04em}
+  .fs-badge.lw{color:#fff;background:var(--primary)}
+  .fs-badge.ts{color:var(--primary);background:var(--primary-soft);border:1.5px solid var(--primary);padding:3px 10px}
+  .fs-bk{font:800 15px 'Noto Sans JP',sans-serif;color:var(--text)}
+  .fs-bsp{flex:1}
+  .fs-chip{height:36px;padding:0 12px;border-radius:18px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font:700 12.5px 'Noto Sans JP',sans-serif;cursor:pointer}
+  .fs-chip.on{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+  .fs-next{height:38px;padding:0 14px;border:none;border-radius:19px;background:#f5c542;color:#2a2100;font:800 13px 'Noto Sans JP',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .fs-next span{background:#2a2100;color:#f5c542;border-radius:10px;padding:1px 7px;font-size:11.5px}
+  .fs-next.done{background:#e7f4ec;color:#1c7a45}
+  .fs-top{padding:10px 14px 4px;display:flex;flex-direction:column;gap:8px}
+  .fs-lead{font:500 12.5px/1.6 'Noto Sans JP',sans-serif;color:var(--muted)}
+  .fs-err{background:#fdecea;border:1px solid #f5c6c0;color:#b03a2e;border-radius:10px;padding:10px 14px;font:600 13px 'Noto Sans JP',sans-serif}
+  .fs-meta{background:var(--surface);border:1.5px dashed var(--primary-tint);border-radius:12px;padding:10px 12px;cursor:pointer}
+  .fs-meta:hover{background:var(--primary-soft)}
+  .fs-meta.ro{cursor:default;border-style:solid;background:var(--primary-soft);font:500 12.5px/1.7 'Noto Sans JP',sans-serif;color:var(--text)}
+  .fs-meta.ro b{color:var(--primary)}
+  .fs-mh{font:700 11.5px 'Noto Sans JP',sans-serif;color:var(--muted);margin-bottom:6px}
+  .fs-mrow{display:flex;flex-wrap:wrap;gap:6px 14px;font:600 12.5px 'Noto Sans JP',sans-serif;color:var(--text)}
+  .fs-mchip b{color:var(--primary);margin-right:6px}
+  .fs-mchip i{color:#b0892a;font-style:normal;font-weight:500}
+
+  .fs-wrap{padding:8px 8px 20px}
+  .fs-wrap.zoomed{overflow-x:auto}
+  .fs-paper{width:760px;margin:0 auto;background:#fff;color:#161616;padding:24px 24px 28px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 10px 30px rgba(19,40,74,.14);font-family:'Noto Sans JP',sans-serif}
+  .fs-ttl{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;font-weight:900;font-size:21px;letter-spacing:.04em;margin-bottom:12px;padding:2px 0;border-radius:6px}
+  .fs-wt{position:relative;padding:2px 6px;cursor:pointer;border-radius:4px}
+  .fs-wt:hover{background:#eef4fd}
+  .fs-wt.on::after{content:"";position:absolute;inset:-3px -1px;border:2.5px solid var(--primary);border-radius:50%;pointer-events:none}
+  .fs-dot{color:#555}
+  .fs-tail{margin-left:4px}
+  .fs-frame{border:2.5px solid #222}
+  .fs-row{display:grid;border-bottom:1px solid #222}
+  .fs-thick{border-bottom:2.5px solid #222}
+  .fs-c{border-right:1px solid #222;padding:5px 8px;min-height:48px}
+  .fs-c:last-child{border-right:none}
+  .fs-lbl{font-size:10.5px;color:#333;display:block;line-height:1.3;white-space:nowrap}
+  .fs-val{font-size:15px;font-weight:700;display:block;margin-top:2px;min-height:21px;white-space:pre-wrap;word-break:break-all}
+  .fs-sub{display:block;font-size:12px;font-weight:600;color:#333}
+  .fs-sama{position:absolute;right:8px;bottom:6px;font-size:12px}
+  .fs-kubun{display:flex;gap:6px;margin-top:4px;font-size:13px;font-weight:700}
+  .fs-kubun span{padding:1px 6px}
+  .fs-kubun span.on{border:1.5px solid #c0392b;border-radius:50%;color:#c0392b}
+  .fs-kanin{display:flex;flex-direction:column}
+  .fs-stamp{width:60px;height:60px;border:2.5px solid #c0392b;border-radius:50%;color:#c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto;font-weight:900;line-height:1.15;transform:rotate(-6deg);text-align:center}
+  .fs-stamp small{font-size:8.5px;font-weight:700}
+  .fs-stamp span{font-size:13.5px}
+  .fs-stamp.big{width:92px;height:92px}
+  .fs-stamp.big small{font-size:11px}
+  .fs-stamp.big span{font-size:19px}
+
+  /* タップできる枠 */
+  .fs-f{cursor:pointer;position:relative;transition:background .12s}
+  .fs-f:hover{background:#eef4fd}
+  .fs-f:focus-visible{outline:3px solid #1d6fd8;outline-offset:-3px}
+  .fs-f.sel{box-shadow:inset 0 0 0 2.5px #1d6fd8;background:#eaf2fe}
+  .guide .fs-f.empty,.guide .fs-ttl.empty{background:#fff6d4;box-shadow:inset 0 0 0 1.5px #d9a92e}
+  .guide .fs-f.empty.sel{box-shadow:inset 0 0 0 2.5px #1d6fd8;background:#eaf2fe}
+  .fs-off{position:relative;background:repeating-linear-gradient(135deg,#fafafa 0 6px,#f3f4f6 6px 12px);color:#666}
+  .fs-ph{display:none;color:#9a7a1c;font-size:12px;font-weight:500}
+  .guide .fs-ph,.fs-off .fs-ph{display:inline}
+  .fs-off .fs-ph{color:#8a919c}
+  .fs-who{position:absolute;top:3px;right:5px;font:700 9.5px 'Noto Sans JP',sans-serif;font-style:normal;border-radius:3px;padding:0 4px;display:none;z-index:1}
+  .guide .fs-who{display:block}
+  .fs-who.adm{background:#e3e9f5;color:#0b3a63}
+  .fs-who.wk{background:#e2f3e8;color:#1c7a45}
+  .fs-who.cu,.fs-who.st{background:#fbe6e4;color:#c0392b}
+
+  .fs-naiyou{grid-template-columns:30px 1fr}
+  .fs-vlabel{border-right:1px solid #222;writing-mode:vertical-rl;text-orientation:upright;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;letter-spacing:.3em}
+  .fs-nbody{display:grid;grid-template-columns:1fr 250px}
+  .fs-sec{padding:8px 10px;min-height:96px;border-bottom:1px dashed #bfc4cc}
+  .fs-sec h4{margin:0 0 3px;font-size:12.5px;color:#0b3a63;font-weight:900}
+  .fs-txt{font-size:13.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+  .fs-a{grid-column:1/3}
+  .fs-b{grid-column:1/2;border-bottom:none;min-height:160px}
+  .fs-confirm{grid-column:2/3;align-self:end;margin:8px;border:1.5px solid #222;font-size:11px;background:#fff}
+  .fs-cfh,.fs-cfr{display:grid;grid-template-columns:1fr 40px}
+  .fs-cfh{background:#f0f0f0;font-weight:900}
+  .fs-cfh>div,.fs-cfr>div{padding:5px 6px;border-bottom:1px solid #999}
+  .fs-cfh>div:first-child,.fs-cfr>div:first-child{border-right:1px solid #999}
+  .fs-cfr>div:last-child{text-align:center;font-size:14px;font-weight:900;padding:3px}
+  .fs-cfr .fs-ph{font-size:10px}
+  .fs-cff{padding:3px 6px;color:#555;font-size:9.5px}
+
+  .fs-tbl{grid-template-columns:96px 1fr}
+  .fs-tl{border-right:1px solid #222;display:flex;align-items:center;padding-left:10px;font-weight:900;font-size:13px;background:#f7f7f7}
+  .fs-tr{display:grid;border-bottom:1px solid #d3d6db;min-height:40px}
+  .fs-tr>div{padding:6px 8px;font-size:13px;font-weight:700;border-right:1px solid #e2e4e8;display:flex;align-items:center;gap:4px;word-break:break-all}
+  .fs-tr>div:last-child{border-right:none}
+  .fs-wrk{grid-template-columns:150px 104px 1fr 112px}
+  .fs-trv{grid-template-columns:150px 54px 104px 1fr 78px}
+  .fs-tot{color:#1c7a45;font-size:11.5px !important;justify-content:flex-end}
+  .fs-note{padding:10px;font:600 12px 'Noto Sans JP',sans-serif;color:#8a919c;background:repeating-linear-gradient(135deg,#fafafa 0 6px,#f3f4f6 6px 12px);border-bottom:1px solid #d3d6db}
+  .fs-addrow{border-bottom:1px solid #d3d6db;background:#f7faff}
+  .fs-addrow button{border:none;background:none;color:#1d6fd8;font:700 12.5px 'Noto Sans JP',sans-serif;cursor:pointer;padding:8px 10px;width:100%;text-align:left}
+  .fs-sum{display:grid;grid-template-columns:1fr 112px;background:#f4f4f4;font-size:13px;font-weight:900}
+  .fs-sum>div{padding:5px 8px;text-align:right}
+  .fs-sum>div:last-child{text-align:left;border-left:1px solid #d3d6db}
+  .fs-gtotal{text-align:right;padding:5px 12px;font-size:13px;font-weight:900;background:#f7f7f7}
+
+  .fs-appr{grid-template-columns:1fr 300px}
+  .fs-al{padding:10px 12px;font-size:12.5px;line-height:2;border-right:1px solid #222}
+  .fs-al b{font-size:14px}
+  .fs-ar{display:flex;flex-direction:column}
+  .fs-ln{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #d3d6db;min-height:44px}
+  .fs-u{flex:1;border-bottom:1px solid #333;font-size:14px;font-weight:700;min-height:22px;padding:0 4px}
+  .fs-sig{flex:1;min-height:70px;display:flex;align-items:center;justify-content:center;padding:6px}
+  .fs-sig img{max-height:60px;max-width:100%}
+  .fs-signph{display:inline !important;font-size:12.5px}
+
+  .fs-info{grid-template-columns:1fr 1fr}
+  .fs-info>div{padding:8px 12px;font-size:12.5px;line-height:1.75}
+  .fs-info>div:first-child{border-right:1px solid #222}
+  .fs-info h5{margin:0 0 2px;font-size:12.5px;font-weight:900}
+  .fs-hint{font-weight:500;color:#6b7480;font-size:11px}
+  .fs-co{display:flex;align-items:center;gap:14px;padding:10px 14px;font-size:11.5px;line-height:1.55}
+  .fs-co b{font-size:13px}
+  .fs-logo{height:48px;width:auto;flex:none}
+  .fs-tslogo{font:italic 900 28px 'Noto Sans JP',sans-serif;letter-spacing:.02em;flex:none;padding:0 6px}
+
+  /* 入力パネル（下から出るシート。PCでは中央） */
+  .fs-scrim{position:absolute;inset:0;background:rgba(15,23,42,.38);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+  .fs-sheet{background:#fff;width:100%;max-width:580px;max-height:88%;overflow-y:auto;border-radius:20px 20px 0 0;padding:12px 18px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 40px rgba(0,0,0,.2);animation:fsup .18s ease-out}
+  @media (min-width:1180px){.fs-scrim{align-items:center}.fs-sheet{border-radius:18px}}
+  @keyframes fsup{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
+  @media (prefers-reduced-motion:reduce){.fs-sheet{animation:none}}
+  .fs-grab{width:42px;height:5px;background:#d4d8de;border-radius:9px;margin:0 auto 10px}
+  .fs-shd{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .fs-shd h3{margin:0;font:900 17px 'Noto Sans JP',sans-serif;color:var(--primary-deep)}
+  .fs-shd span{font:600 12px 'Noto Sans JP',sans-serif;color:var(--muted)}
+  .fs-phint{font:500 12.5px/1.65 'Noto Sans JP',sans-serif;color:var(--muted);margin:0 0 10px}
+  .fs-fld{display:block;margin-bottom:12px;min-width:0}
+  .fs-fld>span{display:block;font:700 12px 'Noto Sans JP',sans-serif;color:#3b4350;margin-bottom:5px}
+  .fs-sheet input,.fs-sheet textarea,.fs-sheet select{width:100%;height:50px;border:1.5px solid #cfd5dd;border-radius:11px;padding:0 12px;font:600 16px 'Noto Sans JP',sans-serif;color:var(--text);background:#fff}
+  .fs-sheet textarea{height:180px;padding:10px 12px;line-height:1.65;font-weight:500;resize:vertical}
+  .fs-sheet textarea.sm{height:96px}
+  .fs-sheet input:focus,.fs-sheet textarea:focus{border-color:#1d6fd8;box-shadow:0 0 0 3px #eaf2fe}
+  .fs-two{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+  .fs-opts{display:flex;flex-wrap:wrap;gap:8px}
+  .fs-opts button{border:1.5px solid #cfd5dd;background:#fff;border-radius:11px;padding:12px 16px;font:700 15px 'Noto Sans JP',sans-serif;cursor:pointer;color:var(--text)}
+  .fs-opts button.on{border-color:var(--primary);background:var(--primary);color:#fff}
+  .fs-tools{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 10px}
+  .fs-tools button{border:1.5px solid var(--primary);background:var(--primary-soft);color:var(--primary);border-radius:999px;padding:9px 15px;font:700 13.5px 'Noto Sans JP',sans-serif;cursor:pointer}
+  .fs-sugg{border:1.5px solid #cfd5dd;border-radius:11px;overflow:hidden;margin:-4px 0 12px}
+  .fs-sugg button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid #e6e9ee;background:#fff;padding:10px 12px;cursor:pointer;font:500 13px/1.5 'Noto Sans JP',sans-serif;color:var(--text)}
+  .fs-sugg button:last-child{border-bottom:none}
+  .fs-sugg button:hover{background:#eaf2fe}
+  .fs-sugg b{font-size:15px;margin-right:8px}
+  .fs-sugg span{color:var(--muted);font-size:12px}
+  .fs-none{padding:9px 12px;font:600 12px 'Noto Sans JP',sans-serif;color:var(--muted);background:#f7f8fa}
+  .fs-acts{display:flex;gap:10px;margin-top:14px;position:sticky;bottom:-16px;background:#fff;padding:8px 0 4px}
+  .fs-acts button{flex:1;height:52px;border-radius:12px;border:1.5px solid #cfd5dd;background:#fff;font:700 15px 'Noto Sans JP',sans-serif;cursor:pointer;color:var(--text)}
+  .fs-acts button.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+  .fs-slist{display:flex;flex-direction:column;gap:8px}
+  .fs-srow{display:flex;align-items:center;gap:8px}
+  .fs-srow input{flex:1}
+  .fs-num{width:28px;height:28px;flex:none;border-radius:50%;background:var(--primary);color:#fff;font:800 13px 'Noto Sans JP',sans-serif;display:flex;align-items:center;justify-content:center}
+  .fs-seg{display:flex;gap:4px;flex:none}
+  .fs-seg button{height:40px;padding:0 10px;border-radius:9px;border:1.5px solid #cfd5dd;background:#fff;color:var(--muted);font:700 12px 'Noto Sans JP',sans-serif;cursor:pointer}
+  .fs-seg button.on{border-color:var(--primary);background:var(--primary);color:#fff}
+  .fs-x{width:36px;height:36px;flex:none;border:none;background:#f0f1f4;color:#9aa1ac;border-radius:9px;font-size:17px;cursor:pointer}
+  .fs-add{margin-top:10px;width:100%;height:44px;border:1.5px dashed var(--primary-tint);background:var(--primary-soft);color:var(--primary);border-radius:11px;font:700 13px 'Noto Sans JP',sans-serif;cursor:pointer}
+  .fs-sheet select{height:44px;font-size:13.5px}
+  .fs-stot{margin-top:14px;border-top:1px dashed var(--border);padding-top:10px;font:600 13px 'Noto Sans JP',sans-serif}
+  .fs-stot>div{display:flex;align-items:center;gap:8px;padding:3px 0}
+  .fs-stot>div>span{flex:1}
+  .fs-stot i{font-style:normal;font-size:11px;color:var(--muted)}
+  .fs-stot b{color:var(--primary);width:100px;text-align:right}
+  .fs-sh{font:700 12px 'Noto Sans JP',sans-serif;color:var(--muted)}
+  .fs-kstamp{display:flex;justify-content:center;padding:6px 0 12px}
+  .fs-unstamp{width:92px;height:92px;border-radius:50%;border:2px dashed #c9ced8;color:#b0b6c0;display:flex;align-items:center;justify-content:center;font:700 12px 'Noto Sans JP',sans-serif}
+  .fs-stampbtn{width:100%;height:50px;border:1.5px solid #c0392b;background:#c0392b;color:#fff;border-radius:12px;font:700 15px 'Noto Sans JP',sans-serif;cursor:pointer}
+  .fs-stampbtn.off{background:#fdecea;color:#c0392b}
+  .fs-rtot{display:flex;align-items:center;height:50px;font:800 16px 'Noto Sans JP',sans-serif;color:var(--primary)}
+  .fs-tabs{display:flex;gap:6px;margin-bottom:6px}
+  .fs-tabs button{flex:1;height:46px;border-radius:11px;border:1.5px solid #cfd5dd;background:#fff;font:700 14px 'Noto Sans JP',sans-serif;cursor:pointer;color:var(--text)}
+  .fs-tabs button b{font-size:17px;margin-left:4px;font-variant-numeric:tabular-nums}
+  .fs-tabs button.on{border-color:#1d6fd8;background:#eaf2fe;color:#1d6fd8}
+  .fs-rowacts{display:flex;gap:8px;justify-content:flex-end}
+  .fs-rowacts button{height:40px;padding:0 14px;border-radius:10px;border:1.5px solid #cfd5dd;background:#fff;color:var(--muted);font:700 12.5px 'Noto Sans JP',sans-serif;cursor:pointer}
+  .fs-rowacts button.del{border-color:#f0c9c6;color:#c0392b}
+  /* ドラムロール（自前。回している途中で画面を描き直さないので閉じない） */
+  .fs-drum{display:flex;align-items:center;justify-content:center;gap:6px;position:relative;height:200px;margin:4px 0 10px;user-select:none;-webkit-user-select:none}
+  .fs-drum::before{content:"";position:absolute;left:0;right:0;top:80px;height:40px;background:#eaf2fe;border-radius:10px;border:1.5px solid #c9d9f5;pointer-events:none}
+  .fs-col{height:200px;width:88px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;position:relative;-webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+  .fs-col::-webkit-scrollbar{display:none}
+  .fs-col div{height:40px;display:flex;align-items:center;justify-content:center;font:700 22px 'Noto Sans JP',sans-serif;scroll-snap-align:center;font-variant-numeric:tabular-nums;color:#9aa1ab;cursor:pointer}
+  .fs-col div.cur{color:var(--text)}
+  .fs-col .pad{scroll-snap-align:none;cursor:default}
+  .fs-colon{font:900 24px 'Noto Sans JP',sans-serif;z-index:1}
+  @media (max-width:520px){.fs-two{grid-template-columns:1fr}.fs-seg button{padding:0 7px}}
+  /* 時間の行は左の「作業時間/移動時間」で分かるので記入者タグを出さない（行の「計」と重なるため） */
+  .fs-tr .fs-who{display:none !important}
+  /* 下部ボタン帯：透明なグラデーション部分は下の帳票へタップを通す */
+  .fs-foot>*{pointer-events:auto}
+
   @media print{
     @page{size:A4;margin:11mm}
     body{background:#fff}
