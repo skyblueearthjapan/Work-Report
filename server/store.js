@@ -89,7 +89,7 @@ function getHistory(query, type) {
     const c = JSON.parse(r.data);
     if (want !== 'all' && c.type !== want) return;
     if (terms.length) {
-      const hay = [c.koban, c.motoKoban, c.seiban, c.nohinSaki, c.okyakuSub, c.kishu, c.katashiki, c.kobanName, c.tantou, c.closedAt, c.yoteibi]
+      const hay = [c.koban, c.motoKoban, c.seiban, c.nohinSaki, c.okyakuSub, c.kishu, c.katashiki, c.kobanName, c.tantou, c.closedAt, c.yoteibi, c.yoteibiEnd]
         .filter(Boolean).join(' ').toLowerCase();
       if (!terms.every(t => hay.indexOf(t) !== -1)) return;
     }
@@ -195,9 +195,14 @@ function setMaster(obj) {
 
 /* ---------------- メール差込 ---------------- */
 function fmtDateJp(d) { if (!d) return ''; const p = String(d).split('-'); return p.length >= 2 ? p.join('/') : String(d); }
+function fmtDateRangeJp(a, b) {
+  if (!a) return fmtDateJp(b);
+  if (!b || b <= a) return fmtDateJp(a);
+  return fmtDateJp(a) + '〜' + (String(b).slice(0, 4) === String(a).slice(0, 4) ? fmtDateJp(b).slice(5) : fmtDateJp(b));
+}
 function fillTemplate(str, c) {
   if (!str) return '';
-  return String(str).replace(/\{工番\}/g, (c && c.koban) || '').replace(/\{お客様名\}/g, (c && c.nohinSaki) || '').replace(/\{作業日\}/g, (c && fmtDateJp(c.yoteibi)) || '');
+  return String(str).replace(/\{工番\}/g, (c && c.koban) || '').replace(/\{お客様名\}/g, (c && c.nohinSaki) || '').replace(/\{作業日\}/g, (c && fmtDateRangeJp(c.yoteibi, c.yoteibiEnd)) || '');
 }
 
 /* ---------------- 初期データ ---------------- */

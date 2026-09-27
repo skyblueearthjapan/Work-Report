@@ -13,7 +13,7 @@
     LW: { name: '株式会社 ラインワークス', parent: '', tel: '043-250-1481', fax: '043-257-9488' },
     TS: { name: 'テクノサービスカンパニー', parent: '＜株式会社 ラインワークス＞', tel: '043-250-1481', fax: '043-301-2465' }
   };
-  var PAPER_ADDR = '〒262-0012　千葉県千葉市花見川区千種町53';
+  var PAPER_ADDR = '〒262-0012　千葉県千葉市花見川区千種町69-1';
   function paperCo(type) { return PAPER_CO[type === 'TS' ? 'TS' : 'LW']; }
   // フッターの社名・住所・連絡先（帳票画面とPDFプレビューで共通）
   function paperFootText(type) { var p = paperCo(type); return esc(PAPER_ADDR) + (p.parent ? '<br>' + esc(p.parent) : '') + '<br>Tel ' + esc(p.tel) + ' ／ Fax ' + esc(p.fax); }
@@ -182,7 +182,7 @@
     return {
       type: type, status: '未着手', koban: '', motoKoban: '', nohinNo: '', kobanName: '',
       nohinSaki: '', okyakuSub: '', basho: '', tantou: '', tel: '', kishu: '', katashiki: '',
-      seiban: '', nenGappi: '', saidaiSekisai: '', hontaiJuryo: '', yoteibi: '', shijiNaiyou: '', workTypes: {}, paid: '有償',
+      seiban: '', nenGappi: '', saidaiSekisai: '', hontaiJuryo: '', yoteibi: '', yoteibiEnd: '', shijiNaiyou: '', workTypes: {}, paid: '有償',
       genin: '', shori: '', confirmItems: defaultConfirm(type),
       staff: [{ id: 's1', name: '', separate: false }],
       commonWork: [{ date: '', start: '', end: '' }],
@@ -192,9 +192,18 @@
     };
   }
   function fmtDate(d) { if (!d) return '　'; var p = String(d).split('-'); if (p.length === 3) return p[0] + '/' + p[1] + '/' + p[2]; if (p.length === 2) return p[0] + '/' + p[1]; return d; }
+  // 作業日（工事日）の期間表示。1日なら「2026/09/28」、複数日なら「2026/09/28〜10/01」（年が同じなら終了側の年を省く）。
+  // sep に改行を渡すと「〜」の前で折り返す（狭い枠用）
+  function fmtDateRange(a, b, sep) {
+    if (!a) return b ? fmtDate(b) : '';
+    if (!b || b <= a) return fmtDate(a);
+    var e = String(b).slice(0, 4) === String(a).slice(0, 4) ? fmtDate(b).slice(5) : fmtDate(b);
+    return fmtDate(a) + (sep || '') + '〜' + e;
+  }
+  function addDay(d) { var p = String(d).split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2] + 1)).toISOString().slice(0, 10); }
   function diffM(a, b) { if (!a || !b) return null; var x = a.split(':').map(Number), y = b.split(':').map(Number); var m = (y[0] * 60 + y[1]) - (x[0] * 60 + x[1]); if (m < 0) m += 1440; return m; }
   function fmtHM(m) { if (m == null || m <= 0) return '—'; return Math.floor(m / 60) + '時間' + (m % 60 ? (' ' + (m % 60) + '分') : ''); }
-  function fillTemplate(str, c) { if (!str) return ''; return str.replace(/\{工番\}/g, c ? c.koban : '').replace(/\{お客様名\}/g, c ? c.nohinSaki : '').replace(/\{作業日\}/g, c ? fmtDate(c.yoteibi) : ''); }
+  function fillTemplate(str, c) { if (!str) return ''; return str.replace(/\{工番\}/g, c ? c.koban : '').replace(/\{お客様名\}/g, c ? c.nohinSaki : '').replace(/\{作業日\}/g, c ? fmtDateRange(c.yoteibi, c.yoteibiEnd) : ''); }
   function pdfName(c) { if (!c) return '作業報告書'; var safe = function (x) { return String(x || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim(); }; var d = c.yoteibi || TODAY; return ['作業報告書', safe(c.nohinSaki), safe(c.kishu), safe(c.koban), safe(d)].filter(Boolean).join('_'); }
   function staffNamesOf(c) { var ns = (c.staff || []).map(function (x) { return x.name; }).filter(Boolean); return ns.length ? ns.join('・') : '—'; }
   function findCase(id) {
@@ -365,7 +374,7 @@
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="flex:1;font:700 15.5px/1.4 \'Noto Sans JP\',sans-serif;color:var(--text)">' + esc(c.kobanName) + '</span>' +
       '<span style="flex:none;font:700 11.5px \'Noto Sans JP\',sans-serif;padding:5px 11px;border-radius:20px;' + (statusStyleMap[c.status] || statusStyleMap['未着手']) + '">' + esc(c.status) + '</span></div>' +
       '<div style="display:flex;flex-wrap:wrap;column-gap:18px;row-gap:5px;font:500 13px/1.4 \'Noto Sans JP\',sans-serif;color:var(--muted)">' +
-      '<span>納品先 ： ' + esc(c.nohinSaki) + '</span><span>担当 ： ' + esc(staffNamesOf(c)) + '</span><span>予定 ： ' + esc(fmtDate(c.yoteibi)) + '</span></div>' +
+      '<span>納品先 ： ' + esc(c.nohinSaki) + '</span><span>担当 ： ' + esc(staffNamesOf(c)) + '</span><span>予定 ： ' + esc(fmtDateRange(workRange(c).from, workRange(c).to) || '　') + '</span></div>' +
       '</button></div>';
   }
   function caseCardPC(c) {
@@ -375,7 +384,7 @@
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-right:46px"><span style="font:800 16px \'Noto Sans JP\',sans-serif;color:var(--text);letter-spacing:.02em">' + esc(c.koban) + '</span>' +
       '<span style="margin-left:auto;font:700 11.5px \'Noto Sans JP\',sans-serif;padding:5px 11px;border-radius:20px;' + (statusStyleMap[c.status] || statusStyleMap['未着手']) + '">' + esc(c.status) + '</span></div>' +
       '<div style="font:700 15px/1.4 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:8px">' + esc(c.kobanName) + '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;column-gap:16px;row-gap:4px;font:500 12.5px/1.4 \'Noto Sans JP\',sans-serif;color:var(--muted)"><span>納品先 ： ' + esc(c.nohinSaki) + '</span><span>担当 ： ' + esc(staffNamesOf(c)) + '</span><span>予定 ： ' + esc(fmtDate(c.yoteibi)) + '</span></div>' +
+      '<div style="display:flex;flex-wrap:wrap;column-gap:16px;row-gap:4px;font:500 12.5px/1.4 \'Noto Sans JP\',sans-serif;color:var(--muted)"><span>納品先 ： ' + esc(c.nohinSaki) + '</span><span>担当 ： ' + esc(staffNamesOf(c)) + '</span><span>予定 ： ' + esc(fmtDateRange(workRange(c).from, workRange(c).to) || '　') + '</span></div>' +
       '</button></div>';
   }
   function viewHome(isPC) {
@@ -446,6 +455,19 @@
   function rowDone(r) { return !!(r && r.date && r.start && r.end); }
   function rowTouched(r) { return !!(r && (r.start || r.end || r.km)); }
   function workDate(o) { var d = o.yoteibi || ''; (o.commonWork || []).forEach(function (e) { if (!d && e.date) d = e.date; }); return d; }
+  // 帳票・PDFに出す作業日の期間。作業日が空なら、作業時間の行の日付の最初〜最後
+  function workRange(o) {
+    if (o.yoteibi) return { from: o.yoteibi, to: o.yoteibiEnd || '' };
+    var ds = (o.commonWork || []).slice(); (o.staff || []).forEach(function (st) { if (st.separate) ds = ds.concat(st.work || []); });
+    ds = ds.map(function (e) { return e.date; }).filter(Boolean).sort();
+    return { from: ds[0] || '', to: ds[ds.length - 1] || '' };
+  }
+  // 行を足すときの日付：前の行の翌日（作業日の終了日まで）。1日だけの案件や前の行がなければ作業日
+  function nextRowDate(o, arr) {
+    var last = ''; (arr || []).forEach(function (r) { if (r.date) last = r.date; });
+    if (!last) return o.yoteibi || TODAY;
+    return (o.yoteibiEnd && last < o.yoteibiEnd) ? addDay(last) : last;
+  }
   function kaninParts(o) {
     var name = (o.kanin && o.kanin.name) || (o.type === 'LW' ? '製造部 田中' : 'TSC 木下');
     var p = name.split(/\s+/);
@@ -516,7 +538,7 @@
       cell('koban', 'adm', L('工番 №') + V(o.koban), 'fs-c') +
       cell('okyaku', 'adm', L('お客様名') + okyaku, 'fs-c') +
       cell('kishu', 'adm', L('機種') + V(o.kishu), 'fs-c') +
-      cell('date', 'adm', L('作業日') + V(fmtDate(workDate(o)).trim()), 'fs-c') + '</div>' +
+      cell('date', 'adm', L('作業日') + V(fmtDateRange(workRange(o).from, workRange(o).to, '\n')), 'fs-c') + '</div>' +
       '<div class="fs-row fs-thick" style="grid-template-columns:130px 1fr 150px 130px">' +
       cell('motoKoban', 'adm', L('元工番') + V(o.motoKoban, '（あれば）'), 'fs-c') +
       cell('staff', 'adm', L('作業者名') + V(staffNames), 'fs-c') +
@@ -568,7 +590,7 @@
       cell('customer', 'adm', '<h5>お客様情報</h5>納品先：' + esc(o.nohinSaki || '—') + '<br>住所：' + esc(o.basho || '—') + '<br>ＴＥＬ：' + esc(o.tel || '—') + '　担当者：' + esc(o.tantou || '—')) +
       cell('plate', 'wk', '<h5>銘板情報 <span class="fs-hint">📷 写真から読み取れます</span></h5>型式；' + esc(o.katashiki || '—') + '<br>製番；' + esc(o.seiban || '—') + '<br>年月日；' + esc(o.nenGappi || '—') + '<br>最大積載重量；' + esc(o.saidaiSekisai || '—') + '<br>本体重量；' + esc(o.hontaiJuryo || '—')) + '</div>';
 
-    var logo = isLW ? '<img src="' + esc(window.LW_LOGO || '') + '" alt="LINE W" class="fs-logo">' : '<span class="fs-tslogo">TS</span>';
+    var logo = isLW ? '<img src="' + esc(window.LW_LOGO || '') + '" alt="LINE W" class="fs-logo">' : '<span class="fs-tslogo">TSC</span>';
     var foot = '<div class="fs-co">' + logo + '<div><b>' + esc(paperCo(o.type).name) + '</b><br>' + paperFootText(o.type) + '</div></div>';
 
     return '<div class="fs-wrap' + (S.fsZoom ? ' zoomed' : '') + '"><div class="fs-paper' + (S.fsGuide === false ? '' : ' guide') + '">' + title +
@@ -694,8 +716,21 @@
     if (f === 'kaninName') { silentSet(ed.scope, function (o) { o.kanin = Object.assign({}, o.kanin || {}, { name: v }); return o; }); return; }
     if (f.indexOf('row.') === 0) { fsSetRowField(ed.scope, fsRowRef(ed.id), f.slice(4), v); return; }
     silentSet(ed.scope, function (o) { o[f] = v; return o; });
+    if (f === 'yoteibi' || f === 'yoteibiEnd') { fsFixRange(ed.scope, evType); return; }
     // 候補の作り直しは打鍵中(input)だけ。フォーカスが外れた時(change)に作り直すと、押しかけた候補ボタンが消えてタップが効かない
     if (f === 'koban' && evType === 'input') { var box = document.getElementById('fs-sugg'); if (box) box.innerHTML = kobanSuggestHtml(v, fsObj(ed.scope).type); }
+  }
+
+  // 作業日の期間：終了日は開始日より後だけ有効。開始日と同じ・前になったら終了日を消す（確定＝change のときだけ）
+  function fsFixRange(scope, evType) {
+    var o = fsObj(scope), endEl = document.getElementById('fs-in-yoteibiEnd');
+    if (endEl) endEl.min = o.yoteibi || '';
+    if (evType !== 'change' || !o.yoteibiEnd) return;
+    if (!o.yoteibi || o.yoteibiEnd <= o.yoteibi) {
+      silentSet(scope, function (x) { x.yoteibiEnd = ''; return x; });
+      if (endEl) endEl.value = '';
+      toast(o.yoteibi ? '終了日は開始日より後の日付にしてください（1日だけなら開始日だけでOK）' : '先に開始日を入れてください', true);
+    }
   }
 
   function renderFsSheet() {
@@ -703,7 +738,7 @@
     var scope = ed.scope, o = fsObj(scope), id = ed.id, isNew = scope === 'new', isLW = o.type === 'LW';
     var inp = function (f, label, opt) {
       opt = opt || {};
-      return '<label class="fs-fld"><span>' + label + '</span><input id="fs-in-' + f + '" data-ed="' + f + '" value="' + esc(o[f] || '') + '"' + (opt.type ? ' type="' + opt.type + '"' : '') + (opt.ph ? ' placeholder="' + esc(opt.ph) + '"' : '') + (opt.mode ? ' inputmode="' + opt.mode + '"' : '') + ' autocomplete="off"></label>';
+      return '<label class="fs-fld"><span>' + label + '</span><input id="fs-in-' + f + '" data-ed="' + f + '" value="' + esc(o[f] || '') + '"' + (opt.type ? ' type="' + opt.type + '"' : '') + (opt.ph ? ' placeholder="' + esc(opt.ph) + '"' : '') + (opt.mode ? ' inputmode="' + opt.mode + '"' : '') + (opt.min ? ' min="' + esc(opt.min) + '"' : '') + ' autocomplete="off"></label>';
     };
     var btns = function (list, cur, action, extra) {
       return '<div class="fs-opts">' + list.map(function (x) { var p = { val: x }; for (var k in (extra || {})) p[k] = extra[k]; return '<button' + act(action, p) + ' type="button" class="' + (x === cur ? 'on' : '') + '">' + esc(x) + '</button>'; }).join('') + '</div>';
@@ -721,7 +756,10 @@
     } else if (id === 'motoKoban') {
       title = '元工番'; body = inp('motoKoban', '元工番', { ph: '例：LW24310' });
     } else if (id === 'date') {
-      title = '作業日'; body = hint('作業予定日を入れます。空欄のときは、作業時間の最初の日付が作業日として印字されます。') + inp('yoteibi', '作業日（作業予定日）', { type: 'date' });
+      title = '作業日'; sub = '何日から何日まで';
+      body = hint('1日で終わるときは<b>開始日だけ</b>、複数日にまたがるときは<b>終了日</b>も入れます。空欄のときは、作業時間の日付の最初〜最後が作業日として印字されます。') +
+        '<div class="fs-two">' + inp('yoteibi', '開始日', { type: 'date' }) + inp('yoteibiEnd', '終了日（複数日のときだけ）', { type: 'date', min: o.yoteibi }) + '</div>' +
+        '<div class="fs-opts"><button' + act('fsOneDay') + ' type="button">1日だけにする（終了日を消す）</button></div>';
     } else if (id === 'paid') {
       title = '区分'; body = btns(['有償', '無償', '調整中'], o.paid, 'setPaid', { scope: scope });
     } else if (id === 'wt') {
@@ -850,7 +888,7 @@
     if (!pvWork.length) pvWork = [{ names: '　', date: '　', range: '　' }];
     if (!pvTravel.length) pvTravel = [{ names: '　', range: '　', km: '　' }];
 
-    var firstDate = ''; (r.commonWork || []).forEach(function (e) { if (e.date && !firstDate) firstDate = e.date; });
+    var wr = workRange(r);
     var kanin = r.kanin || {}; var kStamped = !!kanin.stamped;
     var kName = kanin.name || (r.type === 'LW' ? '製造部 田中' : 'TSC 木下');
     var kp = kName.split(/\s+/); var kDept = kp.length > 1 ? kp[0] : ''; var kPerson = kp.length > 1 ? kp.slice(1).join(' ') : kName;
@@ -872,7 +910,7 @@
       (kStamped ? '<div style="width:50px;height:50px;border-radius:50%;border:2px solid #c0392b;color:#c0392b;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.1;transform:rotate(-6deg)"><span style="font:700 6px \'Noto Sans JP\',sans-serif">' + esc(kDept) + '</span><span style="font:800 11px \'Noto Sans JP\',sans-serif">' + esc(kPerson) + '</span></div>'
         : '<div style="width:46px;height:46px;border-radius:50%;border:1px solid #ccc;color:#bbb;display:flex;align-items:center;justify-content:center;font:700 7px \'Noto Sans JP\',sans-serif">印</div>');
 
-    var logo = isLW ? '<img src="' + esc(window.LW_LOGO || '') + '" alt="LINE W" style="height:42px;width:auto">' : '<span style="font:italic 900 22px \'Noto Sans JP\',sans-serif;letter-spacing:.02em">TS</span>';
+    var logo = isLW ? '<img src="' + esc(window.LW_LOGO || '') + '" alt="LINE W" style="height:42px;width:auto">' : '<span style="font:italic 900 22px \'Noto Sans JP\',sans-serif;letter-spacing:.02em">TSC</span>';
     var footerCompany = paperCo(r.type).name;
     var recipient = paperCo(r.type).name;
 
@@ -883,7 +921,7 @@
       '<div style="display:flex;border-bottom:1px solid #111"><div style="width:120px;border-right:1px solid #111;padding:4px 6px"><div style="' + pvLab + '">工番　№</div><div style="font:700 13px \'Noto Sans JP\',sans-serif">' + esc(r.koban || '　') + '</div></div>' +
       '<div style="flex:1;border-right:1px solid #111;padding:4px 6px"><div style="' + pvLab + '">お客様名</div><div style="display:flex;align-items:baseline;gap:7px;flex-wrap:nowrap;white-space:nowrap;overflow:hidden"><span style="font:700 12.5px \'Noto Sans JP\',sans-serif">' + esc(r.nohinSaki || '　') + '</span>' + (r.okyakuSub ? '<span style="font:600 10.5px \'Noto Sans JP\',sans-serif;color:#333">' + esc(r.okyakuSub) + '</span>' : '') + '<span style="font-size:9.5px">様</span></div></div>' +
       '<div style="width:96px;border-right:1px solid #111;padding:4px 6px"><div style="' + pvLab + '">機種</div><div style="font:600 11px \'Noto Sans JP\',sans-serif">' + esc(r.kishu || '—') + '</div></div>' +
-      '<div style="width:96px;padding:4px 6px"><div style="' + pvLab + '">作業日</div><div style="font:600 11px \'Noto Sans JP\',sans-serif">' + esc(fmtDate(r.yoteibi || firstDate)) + '</div></div></div>' +
+      '<div style="width:96px;padding:4px 6px"><div style="' + pvLab + '">作業日</div><div style="font:600 11px \'Noto Sans JP\',sans-serif">' + esc(fmtDateRange(wr.from, wr.to, '\n') || '　').replace(/\n/g, '<br>') + '</div></div></div>' +
       // row2
       '<div style="display:flex;border-bottom:2px solid #111"><div style="width:120px;border-right:1px solid #111;padding:4px 6px"><div style="' + pvLab + '">元工番</div><div style="font:600 11px \'Noto Sans JP\',sans-serif">' + esc(r.motoKoban || '—') + '</div></div>' +
       '<div style="flex:1;border-right:1px solid #111;padding:4px 6px"><div style="' + pvLab + '">作業者名</div><div style="font:600 11px \'Noto Sans JP\',sans-serif">' + esc((r.staff || []).map(function (x) { return x.name; }).filter(Boolean).join('・') || '　') + '</div></div>' +
@@ -1364,6 +1402,7 @@
       setState({ edit: null, nfError: false });
       toast('工番マスターから お客様名・住所・機種 を入れました');
     },
+    fsOneDay: function () { var ed = S.edit; if (!ed) return; silentSet(ed.scope, function (o) { o.yoteibiEnd = ''; return o; }); render(); },
     fsWhich: function (d) { var ed = S.edit; if (!ed) return; setState({ edit: Object.assign({}, ed, { which: d.w }) }); },
     fsDir: function (d) { var ed = S.edit; if (!ed) return; fsSetRowField(ed.scope, fsRowRef(ed.id), 'dir', d.val); render(); },
     fsClearTime: function () { var ed = S.edit; if (!ed) return; var ref = fsRowRef(ed.id); fsSetRowField(ed.scope, ref, 'start', ''); fsSetRowField(ed.scope, ref, 'end', ''); render(); },
@@ -1381,8 +1420,9 @@
     fsAddRowFor: function (d) {
       var travel = d.kind === 'travel', sep = d.si !== '' && d.si !== undefined;
       var o = fsObj('case');
-      var blank = travel ? { dir: '往路', date: o.yoteibi || TODAY, start: '', end: '', km: '' } : { date: o.yoteibi || TODAY, start: '', end: '' };
       var list = sep ? (travel ? 'travel' : 'work') : (travel ? 'commonTravel' : 'commonWork');
+      var d0 = nextRowDate(o, sep ? ((o.staff || [])[+d.si] || {})[list] : o[list]);
+      var blank = travel ? { dir: '往路', date: d0, start: '', end: '', km: '' } : { date: d0, start: '', end: '' };
       var idx;
       silentSet('case', function (c) {
         if (sep) { var si = +d.si; c.staff = c.staff.map(function (st, x) { if (x !== si) return st; idx = (st[list] || []).length; return Object.assign({}, st, wrapKey(list, (st[list] || []).concat([blank]))); }); }

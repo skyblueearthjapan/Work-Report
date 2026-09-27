@@ -83,6 +83,16 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   check('新規: 管理者欄が全部埋まると入力済み', /入力済み/.test(await txt('.fs-next')), await txt('.fs-next'));
   check('作業種別の丸', !!(await page.$('.fs-wt.on')));
   check('作業日表示', /2026\/10\/01/.test(await txt('[data-fsid="date"]')));
+  // 作業日の期間（開始日〜終了日）。開始日以前の終了日は消える
+  await click('[data-fsid="date"]');
+  check('作業日: 終了日の欄がある', !!(await page.$('#fs-in-yoteibiEnd')));
+  const setEnd = v => page.$eval('#fs-in-yoteibiEnd', (e, v) => { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }, v);
+  await setEnd('2026-09-30');
+  check('作業日: 開始日より前の終了日は消える', (await page.$eval('#fs-in-yoteibiEnd', e => e.value)) === '');
+  await setEnd('2026-10-03');
+  await closeSheet();
+  const dr = await txt('[data-fsid="date"]');
+  check('作業日: 期間表示 2026/10/01〜10/03', /2026\/10\/01\s*〜10\/03/.test(dr), dr.replace(/\n/g, ' '));
   // 帳票に載らない項目
   await click('.fs-meta');
   await page.type('#fs-in-kobanName', '13m切断走行 据付');
@@ -95,6 +105,7 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   await sleep(800);
   const home = await txt('.scr');
   check('保存して案件ストックへ', /LW25083/.test(home) && /13m切断走行 据付/.test(home));
+  check('案件ストック: 予定が期間表示', /予定 ： 2026\/10\/01〜10\/03/.test(home));
 
   // ---- 作業者：報告書入力 ----
   const cards = await page.$$eval('[data-act="openCase"]', a => a.map(x => ({ id: x.getAttribute('data-id'), t: x.innerText })));
@@ -144,6 +155,8 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   // 行の追加・削除
   await click('[data-act="fsAddRow"][data-kind="work"]');
   check('行追加→その行のパネルが開く', /作業時間/.test(await h3()));
+  const nd = await page.$eval('#fs-in-rdate', e => e.value);
+  check('行追加: 日付は前の行の翌日', nd === '2026-10-02', nd);
   await click('.fs-rowacts .del');
   check('行削除', !(await page.$('[data-fsid="row:commonWork:1"]')));
 
@@ -184,6 +197,8 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   const pv = await txt('#pdf-print');
   check('PDFプレビューに時刻', /09:07/.test(pv) && /17:42/.test(pv));
   check('PDFプレビューに実施内容', /スライダー/.test(pv));
+  check('PDF: 作業日が期間', /2026\/10\/01\s*〜10\/03/.test(pv));
+  check('LW PDF: 住所は千種町69-1', /千種町69-1/.test(pv) && !/千種町53/.test(pv));
   check('LW PDF: 紙どおりの連絡先', /株式会社 ラインワークス\s*殿/.test(pv) && /043-250-1481/.test(pv) && /043-257-9488/.test(pv) && !/0165/.test(pv));
   await click('[data-act="goBack"]');
   await sleep(300);
@@ -215,9 +230,11 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   await click('[data-act="goPreview"]'); await sleep(500);
   const tsPv = await txt('#pdf-print');
   check('TS PDF: 宛先・連絡先も紙どおり', /テクノサービスカンパニー\s*殿/.test(tsPv) && /043-301-2465/.test(tsPv));
+  check('TS PDF: ロゴTSC・住所69-1', /(^|\n)TSC(\n|$)/.test(tsPv) && /千種町69-1/.test(tsPv));
   await click('[data-act="goBack"]'); await sleep(300);
   check('TS: TS用の確認事項', /動作確認/.test(tsTxt) && /清掃・片付け/.test(tsTxt));
   check('TS: LWロゴではない', !(await page.$('.fs-paper img.fs-logo')));
+  check('TS 帳票: ロゴTSC・住所69-1', (await txt('.fs-tslogo')) === 'TSC' && /千種町69-1/.test(tsTxt));
   await click('[data-fsid="koban"]');
   await page.type('#fs-in-koban', ''); // 既存の工番は消さない
   const tsSug = await page.$$eval('.fs-sugg button b', b => b.map(x => x.textContent));
