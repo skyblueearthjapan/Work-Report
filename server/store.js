@@ -129,7 +129,8 @@ function saveCase(caseObj) {
   nc.id = newId('c');
   nc.archived = !!nc.archived;
   nc.oshaName = nc.oshaName || nc.nohinSaki || '';
-  nc.tantoushaName = nc.tantoushaName || (nc.staff && nc.staff[0] ? nc.staff[0].name : '');
+  // 御担当者名はお客様が現場で書く欄。作業者（自社社員）の名前で埋めない（空なら現場で未入力として案内される）
+  nc.tantoushaName = nc.tantoushaName || '';
   nc.createdAt = nowStamp();
   nc.updatedAt = nc.createdAt;
   upsertCase(nc);

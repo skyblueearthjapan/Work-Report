@@ -114,6 +114,8 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   await sleep(400);
   check('報告書: 帳票表示', !!(await page.$('.fs-paper')));
   check('報告書: 実施内容が入力可', !!(await page.$('.fs-f[data-fsid="shori"]')));
+  const tan = await txt('[data-fsid="tantousha"]');
+  check('報告書: 御担当者名に作業者名が入らない（未入力のまま）', !/小林|今泉/.test(tan) && await page.$eval('[data-fsid="tantousha"]', e => e.classList.contains('empty')), tan.replace(/\n/g, ' '));
 
   // 作業時間の行 → ドラム
   await click('[data-fsid="row:commonWork:0"]');
