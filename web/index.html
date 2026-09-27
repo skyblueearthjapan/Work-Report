@@ -20,7 +20,7 @@
   <script>
     fetch('/api/boot').then(function (r) { return r.json(); }).then(function (b) {
       window.BOOT = b;
-      var s = document.createElement('script'); s.src = '/app.js?v=20260923'; document.body.appendChild(s);
+      var s = document.createElement('script'); s.src = '/app.js?v=20260927'; document.body.appendChild(s);
     }).catch(function (e) {
       document.getElementById('root').textContent = '起動に失敗しました: ' + e;
     });
