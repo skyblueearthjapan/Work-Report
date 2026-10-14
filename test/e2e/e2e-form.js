@@ -114,8 +114,9 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   await sleep(400);
   check('報告書: 帳票表示', !!(await page.$('.fs-paper')));
   check('報告書: 実施内容が入力可', !!(await page.$('.fs-f[data-fsid="shori"]')));
-  const tan = await txt('[data-fsid="tantousha"]');
-  check('報告書: 御担当者名に作業者名が入らない（未入力のまま）', !/小林|今泉/.test(tan) && await page.$eval('[data-fsid="tantousha"]', e => e.classList.contains('empty')), tan.replace(/\n/g, ' '));
+  check('報告書: 御担当者名のキーボード入力欄なし', !(await page.$('[data-fsid="tantousha"]')));
+  check('報告書: サイン枠が御担当者名', /御担当者名（サイン）/.test(await txt('[data-fsid="sign"]')));
+  check('報告書: 移動の行に距離の枠', /距離/.test(await txt('[data-fsid="row:commonTravel:0"]')));
 
   // 作業時間の行 → ドラム
   await click('[data-fsid="row:commonWork:0"]');
@@ -138,9 +139,22 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   await sleep(400);
   const en = await page.$eval('#fs-tab-end', e => e.textContent);
   check('ドラム: 終了 17:42', en === '17:42', en);
+  check('休憩: 12〜13時を含むので自動60分', /自動（1h）/.test(await txt('#fs-brk-auto')) && (await txt('#fs-rtot')) === '7時間 35分', await txt('#fs-rtot'));
   await closeSheet();
   const row = await txt('[data-fsid="row:commonWork:0"]');
-  check('帳票の行に時刻と計', /09:07/.test(row) && /17:42/.test(row) && /8時間 35分/.test(row), row.replace(/\n/g, ' '));
+  check('帳票の行に時刻・休憩・計', /09:07/.test(row) && /17:42/.test(row) && /休憩1h/.test(row) && /7時間 35分/.test(row), row.replace(/\n/g, ' '));
+  // 13時で終わってお昼を後で取った → 「なし」に直せる。直した値は時刻を変えても残る
+  await click('[data-fsid="row:commonWork:0"]');
+  await click('.fs-sheet [data-act="fsBreak"][data-val="0"]');
+  check('休憩: なしを選ぶとパネル維持＋計が戻る', (await sheetOpen()) && (await txt('#fs-rtot')) === '8時間 35分', await txt('#fs-rtot'));
+  await click('.fs-sheet [data-act="fsBreak"][data-val="45"]');
+  check('休憩: 45分', (await txt('#fs-rtot')) === '7時間 50分', await txt('#fs-rtot'));
+  await page.type('#fs-in-kyukei', '20');
+  await sleep(200);
+  check('休憩: その他20分', (await txt('#fs-rtot')) === '8時間 15分', await txt('#fs-rtot'));
+  await click('.fs-sheet [data-act="fsBreak"][data-val="auto"]');
+  check('休憩: 自動に戻す', (await txt('#fs-rtot')) === '7時間 35分', await txt('#fs-rtot'));
+  await closeSheet();
 
   // 移動時間
   await click('[data-fsid="row:commonTravel:0"]');
@@ -153,6 +167,7 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   const trow = await txt('[data-fsid="row:commonTravel:0"]');
   check('移動: 復路・45Km', /復路/.test(trow) && /45 Km/.test(trow), trow.replace(/\n/g, ' '));
   check('移動: 途中入力は未入力扱い', await page.$eval('[data-fsid="row:commonTravel:0"]', e => e.classList.contains('empty')));
+  check('移動: 走行距離の合計', /走行距離 合計 45 Km/.test(await txt('.fs-paper')));
 
   // 行の追加・削除
   await click('[data-act="fsAddRow"][data-kind="work"]');
@@ -198,6 +213,8 @@ function check(name, ok, info) { results.push((ok ? 'PASS ' : 'FAIL ') + name + 
   await sleep(600);
   const pv = await txt('#pdf-print');
   check('PDFプレビューに時刻', /09:07/.test(pv) && /17:42/.test(pv));
+  check('PDF: 行ごとの時間と休憩', /09:07 〜 17:42 Ｈ（休憩1h）/.test(pv) && /7時間 35分/.test(pv), (pv.match(/09:07[^\n]*/) || [''])[0]);
+  check('PDF: 走行距離の合計', /走行距離 合計 45 Km/.test(pv) && /45 Km/.test(pv));
   check('PDFプレビューに実施内容', /スライダー/.test(pv));
   check('PDF: 作業日が期間', /2026\/10\/01\s*〜10\/03/.test(pv));
   check('LW PDF: 住所は千種町69-1', /千種町69-1/.test(pv) && !/千種町53/.test(pv));

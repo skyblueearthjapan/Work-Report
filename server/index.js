@@ -26,7 +26,7 @@ app.use(express.json({ limit: '30mb' })); // 署名dataURL・音声・PDFの受�
 function sanitizeClientCase(b) {
   if (!b || typeof b !== 'object') return {};
   const o = Object.assign({}, b);
-  ['signatureFileId', 'pdfFileId', 'driveFolderId', 'createdAt', 'updatedAt'].forEach(k => { delete o[k]; });
+  ['signatureFileId', 'pdfFileId', 'driveFolderId', 'createdAt', 'updatedAt', 'closedTs'].forEach(k => { delete o[k]; });
   return o;
 }
 

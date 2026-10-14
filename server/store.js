@@ -146,6 +146,7 @@ function duplicateCase(id) {
   nc.status = '未着手';
   nc.archived = false;
   nc.closedAt = '';
+  nc.closedTs = '';
   nc.signature = '';
   nc.signatureFileId = '';
   nc.pdfFileId = '';
@@ -168,6 +169,7 @@ function closeCase(id) {
   c.archived = true;
   c.status = 'クローズ';
   c.closedAt = todayStr();
+  c.closedTs = nowStamp(); // 昼休憩の自動控除（2026-10-14〜）の後にクローズした印。帳票側で使う
   c.updatedAt = nowStamp();
   upsertCase(c);
   return true;

@@ -203,6 +203,29 @@
   function addDay(d) { var p = String(d).split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2] + 1)).toISOString().slice(0, 10); }
   function diffM(a, b) { if (!a || !b) return null; var x = a.split(':').map(Number), y = b.split(':').map(Number); var m = (y[0] * 60 + y[1]) - (x[0] * 60 + x[1]); if (m < 0) m += 1440; return m; }
   function fmtHM(m) { if (m == null || m <= 0) return '—'; return Math.floor(m / 60) + '時間' + (m % 60 ? (' ' + (m % 60) + '分') : ''); }
+  // 昼休憩：12:00〜13:00 を丸ごと含む行は自動で60分引く。現場で直した値（kyukeiManual）はそのまま使う。
+  // 導入前にクローズした案件は自動で引かない（Drive に保管済みのPDFと時間を合わせるため）。
+  // 導入後のクローズはサーバーが closedTs を記録するので、それが無いクローズ済み案件＝導入前
+  function hmToM(t) { var p = String(t || '').split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0); }
+  function autoBreak(r, o) {
+    if (o && o.archived && !o.closedTs) return 0;
+    if (!r || !r.start || !r.end) return 0;
+    var s = hmToM(r.start), e = hmToM(r.end);
+    return (e > s && s <= 720 && e >= 780) ? 60 : 0;
+  }
+  // 時刻が揃っていない行には休憩を出さない（手で選んだ値は残しておき、時刻が入ったら効く）。日をまたぐ行は自動では引かない
+  function rowBreak(r, o) { if (!r || !r.start || !r.end) return 0; return r.kyukeiManual ? Math.max(0, +r.kyukei || 0) : autoBreak(r, o); }
+  // 休憩を引いた行の時間（分）。時刻が揃っていなければ null
+  function rowMin(r, o) { var m = diffM(r && r.start, r && r.end); if (!m) return m; return Math.max(0, m - rowBreak(r, o)); }
+  function fmtBreak(m) { return m >= 60 ? (Math.floor(m / 60) + 'h' + (m % 60 ? (m % 60) + '分' : '')) : (m + '分'); }
+  // 走行距離：全角数字・カンマ・単位が混じっても数として読む
+  function kmNum(v) { var s = String(v || '').replace(/[０-９．]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).replace(/[,，]/g, ''); var n = parseFloat(s); return isNaN(n) ? 0 : n; }
+  function fmtKm(v) { return String(v || '').trim().replace(/\s*(km|ｋｍ|キロ(メートル)?)$/i, '') + ' Km'; }
+  function kmTotal(o) {
+    var t = 0; (o.commonTravel || []).forEach(function (r) { t += kmNum(r.km); });
+    (o.staff || []).forEach(function (st) { if (st.separate) (st.travel || []).forEach(function (r) { t += kmNum(r.km); }); });
+    return Math.round(t * 10) / 10;
+  }
   function fillTemplate(str, c) { if (!str) return ''; return str.replace(/\{工番\}/g, c ? c.koban : '').replace(/\{お客様名\}/g, c ? c.nohinSaki : '').replace(/\{作業日\}/g, c ? fmtDateRange(c.yoteibi, c.yoteibiEnd) : ''); }
   function pdfName(c) { if (!c) return '作業報告書'; var safe = function (x) { return String(x || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim(); }; var d = c.yoteibi || TODAY; return ['作業報告書', safe(c.nohinSaki), safe(c.kishu), safe(c.koban), safe(d)].filter(Boolean).join('_'); }
   function staffNamesOf(c) { var ns = (c.staff || []).map(function (x) { return x.name; }).filter(Boolean); return ns.length ? ns.join('・') : '—'; }
@@ -501,7 +524,6 @@
     (o.commonTravel || []).forEach(function (r, i) { if (rowTouched(r) && !rowDone(r)) L.push('row:commonTravel:' + i); });
     staff.forEach(function (st, si) { if (st.separate) (st.travel || []).forEach(function (r, i) { if (rowTouched(r) && !rowDone(r)) L.push('row:travel:' + i + ':' + si); }); });
     if (!o.oshaName) L.push('osha');
-    if (!o.tantoushaName) L.push('tantousha');
     if (!o.signature) L.push('sign');
     if (!(o.kanin && o.kanin.stamped)) L.push('kanin');
     return L;
@@ -560,30 +582,31 @@
       var rows = [];
       if (commonStaff(o).length || (o[cl] || []).some(rowTouched)) (o[cl] || []).forEach(function (r, i) { rows.push({ id: 'row:' + cl + ':' + i, r: r, ref: { list: cl, i: i } }); });
       (o.staff || []).forEach(function (st, si) { if (st.separate) (st[sl] || []).forEach(function (r, i) { rows.push({ id: 'row:' + sl + ':' + i + ':' + si, r: r, ref: { list: sl, i: i, si: String(si) } }); }); });
-      var tot = 0;
       var html = rows.map(function (x) {
-        var r = x.r || {}, m = diffM(r.start, r.end); if (m) tot += m;
-        var tm = (esc(r.start) || '<span class="fs-ph">--:--</span>') + ' 〜 ' + (esc(r.end) || '<span class="fs-ph">--:--</span>');
+        var r = x.r || {}, m = rowMin(r, o), brk = rowBreak(r, o);
+        var tm = (esc(r.start) || '<span class="fs-ph">--:--</span>') + ' 〜 ' + (esc(r.end) || '<span class="fs-ph">--:--</span>') + (brk ? '<small class="fs-brk">休憩' + fmtBreak(brk) + '</small>' : '');
+        var tot = '<div class="fs-tot">' + (m ? '計 ' + fmtHM(m) : '') + '</div>';
         var inner = travel
-          ? '<div>' + esc(fsRowNames(o, x.ref)) + '</div><div>' + esc(r.dir || '往路') + '</div><div>' + (esc(fmtDate(r.date).trim()) || '<span class="fs-ph">日付</span>') + '</div><div>' + tm + '</div><div>' + (r.km ? esc(r.km) + ' Km' : '') + '</div>'
-          : '<div>' + esc(fsRowNames(o, x.ref)) + '</div><div>' + (esc(fmtDate(r.date).trim()) || '<span class="fs-ph">日付</span>') + '</div><div>' + tm + '</div><div class="fs-tot">' + (m ? '計 ' + fmtHM(m) : '') + '</div>';
+          ? '<div>' + esc(fsRowNames(o, x.ref)) + '</div><div>' + esc(r.dir || '往路') + '</div><div>' + (esc(fmtDate(r.date).trim()) || '<span class="fs-ph">日付</span>') + '</div><div>' + tm + '</div>' + tot + '<div class="fs-km">' + (r.km ? esc(fmtKm(r.km)) : '<span class="fs-ph">距離</span>') + '</div>'
+          : '<div>' + esc(fsRowNames(o, x.ref)) + '</div><div>' + (esc(fmtDate(r.date).trim()) || '<span class="fs-ph">日付</span>') + '</div><div>' + tm + '</div>' + tot;
         return cell(x.id, 'wk', inner, 'fs-tr ' + (travel ? 'fs-trv' : 'fs-wrk'), isNew);
       }).join('');
       // 合計はPDFと同じ算出（共通行＋別行動の行）
-      var all = sumWork(o[cl]); (o.staff || []).forEach(function (st) { if (st.separate) all += sumWork(st[sl]); });
+      var all = sumWork(o[cl], o); (o.staff || []).forEach(function (st) { if (st.separate) all += sumWork(st[sl], o); });
+      var km = travel ? kmTotal(o) : 0;
       var add = isNew ? '' : '<div class="fs-addrow"><button' + act('fsAddRow', { kind: kind }) + ' type="button">＋ ' + (travel ? '移動時間' : '作業時間') + 'の行を追加</button></div>';
       var note = isNew ? '<div class="fs-note">' + (travel ? '移動時間' : '作業時間') + 'は現場で作業者が入力します</div>' : '';
       return '<div class="fs-row fs-tbl"><div class="fs-tl">' + (travel ? '移動時間' : '作業時間') + '</div><div class="fs-trows">' + html + note + add +
-        '<div class="fs-sum"><div>' + (travel ? '移動時間' : '作業時間') + ' 合計</div><div>' + fmtHM(all) + '</div></div></div></div>';
+        '<div class="fs-sum"><div>' + (km ? '<span class="fs-kmtot">走行距離 合計 ' + km + ' Km</span>' : '') + (travel ? '移動時間' : '作業時間') + ' 合計</div><div>' + fmtHM(all) + '</div></div></div></div>';
     };
-    var allW = sumWork(o.commonWork), allT = sumWork(o.commonTravel);
-    (o.staff || []).forEach(function (st) { if (st.separate) { allW += sumWork(st.work); allT += sumWork(st.travel); } });
+    var allW = sumWork(o.commonWork, o), allT = sumWork(o.commonTravel, o);
+    (o.staff || []).forEach(function (st) { if (st.separate) { allW += sumWork(st.work, o); allT += sumWork(st.travel, o); } });
 
     var recipient = paperCo(o.type).name;
     var approve = '<div class="fs-row fs-thick fs-appr"><div class="fs-al">上記作業が終了したことを承認します。<br><b>' + esc(recipient) + '　殿</b></div><div class="fs-ar">' +
       cell('osha', 'cu', '<span class="fs-lbl">御社名</span><span class="fs-u">' + (o.oshaName ? esc(o.oshaName) : '<span class="fs-ph">タップ</span>') + '</span>', 'fs-ln', isNew) +
-      cell('tantousha', 'cu', '<span class="fs-lbl">御担当者名</span><span class="fs-u">' + (o.tantoushaName ? esc(o.tantoushaName) : '<span class="fs-ph">タップ</span>') + '</span>', 'fs-ln', isNew) +
-      cell('sign', 'cu', o.signature ? '<img alt="サイン" src="' + esc(o.signature) + '">' : '<span class="fs-ph fs-signph">' + (isNew ? 'お客様サイン（現場で取得）' : '✍ ここをタップしてお客様にサインをいただく') + '</span>', 'fs-sig', isNew) +
+      // 御担当者名はサインでいただく（キーボード入力の欄は 2026-10-14 に廃止）
+      cell('sign', 'cu', '<span class="fs-lbl">御担当者名（サイン）</span>' + (o.signature ? '<img alt="サイン" src="' + esc(o.signature) + '">' : '<span class="fs-ph fs-signph">' + (isNew ? 'お客様サイン（現場で取得）' : '✍ ここをタップしてお客様にサインをいただく') + '</span>'), 'fs-sig', isNew) +
       '</div></div>';
 
     var info = '<div class="fs-row fs-thick fs-info">' +
@@ -638,7 +661,7 @@
       '<button' + act('goPreview') + ' style="flex:1;height:56px;border:none;background:var(--primary);color:#fff;border-radius:14px;font:700 16px \'Noto Sans JP\',sans-serif;cursor:pointer;box-shadow:0 6px 18px var(--primary-shadow)">PDFで内容を確認 →</button></div>';
     return viewFormTop('case') + viewFormSheet('case') + footer;
   }
-  function sumWork(arr) { var t = 0; (arr || []).forEach(function (row) { var m = diffM(row.start, row.end); if (m) t += m; }); return t; }
+  function sumWork(arr, o) { var t = 0; (arr || []).forEach(function (row) { var m = rowMin(row, o); if (m) t += m; }); return t; }
 
   /* ---------------- 入力パネル（ボトムシート） ---------------- */
   // 工番の候補：その案件の種別（LW/TS）で始まる工番を先に。工番・納入先・受注先・品名で絞り込み。
@@ -699,6 +722,24 @@
     var v = ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2);
     fsSetRowField(ed.scope, fsRowRef(ed.id), ed.which || 'start', v);
     var lab = document.getElementById('fs-tab-' + (ed.which || 'start')); if (lab) lab.textContent = v;
+    refreshRowPanel();
+  }
+  function breakNote(r, o) {
+    if (r.kyukeiManual) return '手で選んだ休憩です（時刻を変えてもそのまま）。「自動」に戻すこともできます。';
+    if (autoBreak(r, o)) return '12:00〜13:00 をまたぐので、休憩60分を自動で引いています。お昼を取らなかった・時間が違うときは選び直してください。';
+    return '12:00〜13:00 を含む行は、休憩60分を自動で引きます。それ以外で休憩を取ったときは選んでください。';
+  }
+  // 時刻・休憩を変えたとき、入力パネルを描き直さずに「この行の計」と休憩の表示だけ更新する
+  function refreshRowPanel() {
+    var ed = S.edit; if (!ed || String(ed.id).indexOf('row:') !== 0) return;
+    var o = fsObj(ed.scope), r = fsRow(o, fsRowRef(ed.id)) || {};
+    var tot = document.getElementById('fs-rtot'); if (tot) tot.textContent = fmtHM(rowMin(r, o));
+    var note = document.getElementById('fs-brk-note'); if (note) note.textContent = breakNote(r, o);
+    var au = document.getElementById('fs-brk-auto'); if (au) au.textContent = '自動（' + fmtBreak(autoBreak(r, o)) + '）';
+    [].forEach.call(document.querySelectorAll('.fs-brkopts button'), function (b) {
+      var v = b.getAttribute('data-val');
+      b.classList.toggle('on', r.kyukeiManual ? (v !== 'auto' && String(+r.kyukei || 0) === v) : v === 'auto');
+    });
   }
   function fsSetRowField(scope, ref, field, val) {
     silentSet(scope, function (o) {
@@ -714,6 +755,13 @@
     var f = el.getAttribute('data-ed'), v = el.value;
     if (f === 'staffName') { var si = +el.getAttribute('data-si'); silentSet(ed.scope, function (o) { o.staff = o.staff.map(function (st, i) { return i === si ? Object.assign({}, st, { name: v }) : st; }); return o; }); return; }
     if (f === 'kaninName') { silentSet(ed.scope, function (o) { o.kanin = Object.assign({}, o.kanin || {}, { name: v }); return o; }); return; }
+    if (f === 'row.kyukei') {
+      // 「その他」の分数：入れたら手入力扱い、空にしたら自動に戻す
+      var ref = fsRowRef(ed.id), n = String(v).trim() === '' ? null : Math.max(0, Math.min(600, Math.round(+v) || 0));
+      fsSetRowField(ed.scope, ref, 'kyukeiManual', n !== null);
+      fsSetRowField(ed.scope, ref, 'kyukei', n === null ? '' : String(n));
+      refreshRowPanel(); return;
+    }
     if (f.indexOf('row.') === 0) { fsSetRowField(ed.scope, fsRowRef(ed.id), f.slice(4), v); return; }
     silentSet(ed.scope, function (o) { o[f] = v; return o; });
     if (f === 'yoteibi' || f === 'yoteibiEnd') { fsFixRange(ed.scope, evType); return; }
@@ -780,7 +828,7 @@
         return '<div class="fs-srow"><span class="fs-num">' + (si + 1) + '</span><input id="fs-in-staff-' + si + '" data-ed="staffName" data-si="' + si + '" value="' + esc(st.name) + '" placeholder="氏名" autocomplete="off">' + seg +
           ((o.staff || []).length > 1 ? '<button' + act('removeStaff', { scope: scope, si: si }) + ' type="button" class="fs-x" aria-label="削除">×</button>' : '') + '</div>';
       }).join('');
-      var totals = isNew ? '' : '<div class="fs-stot"><div class="fs-sh">スタッフ別 作業時間合計</div>' + (o.staff || []).map(function (st) { return '<div><span>' + esc(st.name || '—') + '</span><i>' + (st.separate ? '別行動' : 'メイン') + '</i><b>' + fmtHM(st.separate ? sumWork(st.work) : sumWork(o.commonWork)) + '</b></div>'; }).join('') + '</div>';
+      var totals = isNew ? '' : '<div class="fs-stot"><div class="fs-sh">スタッフ別 作業時間合計</div>' + (o.staff || []).map(function (st) { return '<div><span>' + esc(st.name || '—') + '</span><i>' + (st.separate ? '別行動' : 'メイン') + '</i><b>' + fmtHM(st.separate ? sumWork(st.work, o) : sumWork(o.commonWork, o)) + '</b></div>'; }).join('') + '</div>';
       body = hint(isNew ? '現場に行く人を登録します。作業時間・移動時間は現場で入力します。' : '「別行動」にした人は、作業時間・移動時間を個別に入力できます（それ以外は全員同じ時間で連名）。') +
         '<div class="fs-slist">' + rows + '</div><button' + act(isNew ? 'addNewStaff' : 'addStaffCase') + ' type="button" class="fs-add">＋ スタッフを追加</button>' + staffPicker(scope) + totals;
     } else if (id === 'kanin') {
@@ -792,8 +840,6 @@
         '<button' + act('toggleStamp', { scope: scope }) + ' type="button" class="fs-stampbtn' + (stamped ? ' off' : '') + '">' + (stamped ? '確認印を取り消す' : '確認印を押す') + '</button>';
     } else if (id === 'osha') {
       title = '御社名'; body = inp('oshaName', '御社名');
-    } else if (id === 'tantousha') {
-      title = '御担当者名'; body = inp('tantoushaName', '御担当者名');
     } else if (id === 'customer') {
       title = 'お客様情報';
       body = inp('nohinSaki', '納品先（お客様名と同じ項目です）') + inp('basho', '住所', { ph: '例：宮崎県東諸県郡国富町…' }) + '<div class="fs-two">' + inp('tel', '電話番号（TEL）', { mode: 'tel', ph: '例：0985-00-0000' }) + inp('tantou', 'ご担当者', { ph: '例：赤木' }) + '</div>';
@@ -818,13 +864,18 @@
         (o.staff || []).map(function (st, si) { return st.separate ? '<button' + act('fsAddRowFor', { kind: kind, si: si }) + ' type="button">' + esc(st.name || ('作業者' + (si + 1))) + '（別行動）</button>' : ''; }).join('') + '</div>';
     } else if (id.indexOf('row:') === 0) {
       var ref = fsRowRef(id), r = fsRow(o, ref) || {}, travel = isTravelList(ref.list), which = ed.which || 'start';
-      var arr = fsRowArr(o, ref), m = diffM(r.start, r.end);
+      var arr = fsRowArr(o, ref);
       title = travel ? '移動時間' : '作業時間'; sub = fsRowNames(o, ref);
       var tab = function (w, label) { return '<button' + act('fsWhich', { w: w }) + ' type="button" class="' + (which === w ? 'on' : '') + '">' + label + ' <b id="fs-tab-' + w + '">' + (esc(r[w]) || '--:--') + '</b></button>'; };
+      var bk = function (v, label) { var on = r.kyukeiManual ? (v !== 'auto' && String(+r.kyukei || 0) === v) : v === 'auto'; return '<button' + act('fsBreak', { val: v }) + ' type="button"' + (v === 'auto' ? ' id="fs-brk-auto"' : '') + ' class="' + (on ? 'on' : '') + '">' + label + '</button>'; };
       body = (travel ? '<div class="fs-fld"><span>区分</span>' + btns(['往路', '現地', '復路'], r.dir || '往路', 'fsDir') + '</div>' : '') +
         '<div class="fs-two"><label class="fs-fld"><span>日付</span><input id="fs-in-rdate" data-ed="row.date" type="date" value="' + esc(r.date || '') + '"></label>' +
-        (travel ? '<label class="fs-fld"><span>距離（Km）</span><input id="fs-in-rkm" data-ed="row.km" inputmode="decimal" value="' + esc(r.km || '') + '" placeholder="0"></label>' : '<div class="fs-fld"><span>この行の計</span><b class="fs-rtot">' + fmtHM(m) + '</b></div>') + '</div>' +
+        (travel ? '<label class="fs-fld"><span>走行距離（Km）往復まとめても片道ずつでも可</span><input id="fs-in-rkm" data-ed="row.km" inputmode="decimal" value="' + esc(r.km || '') + '" placeholder="例：120"></label>' : '<div class="fs-fld"><span>この行の計（休憩を引いた時間）</span><b class="fs-rtot" id="fs-rtot">' + fmtHM(rowMin(r, o)) + '</b></div>') + '</div>' +
         '<div class="fs-fld"><span>時刻（回して選ぶ・数字をタップでも選べます）</span><div class="fs-tabs">' + tab('start', '開始') + tab('end', '終了') + '</div>' + drumHtml() + '</div>' +
+        '<div class="fs-fld"><span>休憩（お昼など）</span><div class="fs-opts fs-brkopts">' + bk('auto', '自動（' + fmtBreak(autoBreak(r, o)) + '）') + bk('0', 'なし') + bk('30', '30分') + bk('45', '45分') + bk('60', '60分') +
+        '<label class="fs-brkin"><input id="fs-in-kyukei" data-ed="row.kyukei" type="number" inputmode="numeric" min="0" max="600" value="' + (r.kyukeiManual && ['0', '30', '45', '60'].indexOf(String(+r.kyukei || 0)) < 0 ? esc(r.kyukei) : '') + '" placeholder="その他">分</label></div>' +
+        '<p class="fs-phint" id="fs-brk-note">' + breakNote(r, o) + '</p></div>' +
+        (travel ? '<div class="fs-fld"><span>この行の計（休憩を引いた時間）</span><b class="fs-rtot" id="fs-rtot">' + fmtHM(rowMin(r, o)) + '</b></div>' : '') +
         '<div class="fs-rowacts"><button' + act('fsClearTime') + ' type="button">時刻をクリア</button>' +
         (arr.length > 1 ? '<button' + act('fsDelRow') + ' type="button" class="del">この行を削除</button>' : '') + '</div>';
     }
@@ -851,7 +902,7 @@
   /* ---------------- SIGN ---------------- */
   function viewSign() {
     var r = findCase(S.activeId) || {};
-    var signerLine = (r.oshaName || '') + (r.tantoushaName ? ('　' + r.tantoushaName + ' 様') : '');
+    var signerLine = r.oshaName ? (r.oshaName + '　御担当者様') : '';
     return '<div style="padding:26px 22px;animation:scin .28s ease both;display:flex;flex-direction:column;height:100%">' +
       '<div style="font:900 20px/1.3 \'Noto Sans JP\',sans-serif;color:var(--text);margin-bottom:6px">お客様サイン</div>' +
       '<div style="font:500 13.5px/1.6 \'Noto Sans JP\',sans-serif;color:var(--muted);margin-bottom:20px">下の枠内に、お客様にサインをお願いします。</div>' +
@@ -874,19 +925,23 @@
     var orderedStaff = r.staff || [];
     var commonNames = orderedStaff.filter(function (st) { return !st.separate; }).map(function (st, i) { return st.name || ('作業者' + (orderedStaff.indexOf(st) + 1)); }).join('・') || '（該当なし）';
 
-    var allWorkM = sumWork(r.commonWork), allTravelM = sumWork(r.commonTravel);
-    orderedStaff.forEach(function (st) { if (st.separate) { allWorkM += sumWork(st.work); allTravelM += sumWork(st.travel); } });
+    var allWorkM = sumWork(r.commonWork, r), allTravelM = sumWork(r.commonTravel, r), kmAll = kmTotal(r);
+    orderedStaff.forEach(function (st) { if (st.separate) { allWorkM += sumWork(st.work, r); allTravelM += sumWork(st.travel, r); } });
 
     var sepStaff = orderedStaff.filter(function (st) { return st.separate; });
     var pvWork = [];
-    (r.commonWork || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: commonNames, date: fmtDate(e.date), range: (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ') : '　' }); });
-    sepStaff.forEach(function (st) { (st.work || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: st.name || '—', date: fmtDate(e.date), range: (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ') : '　' }); }); });
-    var trvRange = function (e) { var pre = (e.dir ? (e.dir + ' ') : '') + (e.date ? (fmtDate(e.date) + '　') : ''); var t = (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　')) : ''; return (pre + t).trim() || '　'; };
+    // 各行：時刻（休憩があれば併記）と、休憩を引いたその行の時間
+    var brkTxt = function (e) { var b = rowBreak(e, r); return b ? ('（休憩' + fmtBreak(b) + '）') : ''; };
+    var durTxt = function (e) { var m = rowMin(e, r); return m ? fmtHM(m) : '　'; };
+    var wkRange = function (e) { return (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + ' Ｈ' + brkTxt(e)) : '　'; };
+    (r.commonWork || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: commonNames, date: fmtDate(e.date), range: wkRange(e), dur: durTxt(e) }); });
+    sepStaff.forEach(function (st) { (st.work || []).filter(function (e) { return e.start || e.end || e.date; }).forEach(function (e) { pvWork.push({ names: st.name || '—', date: fmtDate(e.date), range: wkRange(e), dur: durTxt(e) }); }); });
+    var trvRange = function (e) { var pre = (e.dir ? (e.dir + ' ') : '') + (e.date ? (fmtDate(e.date) + '　') : ''); var t = (e.start || e.end) ? ((e.start || '　') + ' 〜 ' + (e.end || '　') + brkTxt(e)) : ''; return (pre + t).trim() || '　'; };
     var pvTravel = [];
-    (r.commonTravel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: commonNames, range: trvRange(e), km: e.km ? (e.km + ' Km') : '　' }); });
-    sepStaff.forEach(function (st) { (st.travel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: st.name || '—', range: trvRange(e), km: e.km ? (e.km + ' Km') : '　' }); }); });
-    if (!pvWork.length) pvWork = [{ names: '　', date: '　', range: '　' }];
-    if (!pvTravel.length) pvTravel = [{ names: '　', range: '　', km: '　' }];
+    (r.commonTravel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: commonNames, range: trvRange(e), dur: durTxt(e), km: e.km ? fmtKm(e.km) : '　' }); });
+    sepStaff.forEach(function (st) { (st.travel || []).filter(function (e) { return e.start || e.end || e.km || e.date; }).forEach(function (e) { pvTravel.push({ names: st.name || '—', range: trvRange(e), dur: durTxt(e), km: e.km ? fmtKm(e.km) : '　' }); }); });
+    if (!pvWork.length) pvWork = [{ names: '　', date: '　', range: '　', dur: '　' }];
+    if (!pvTravel.length) pvTravel = [{ names: '　', range: '　', dur: '　', km: '　' }];
 
     var wr = workRange(r);
     var kanin = r.kanin || {}; var kStamped = !!kanin.stamped;
@@ -902,8 +957,8 @@
 
     var sig = r.signature ? '<img src="' + esc(r.signature) + '" alt="" style="position:absolute;left:0;bottom:1px;height:38px;width:auto;max-width:100%">' : '';
 
-    var workRowsHtml = pvWork.map(function (w) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(w.names) + '</div><div style="width:84px;border-right:1px solid #e2e2e2;padding:3px 6px">' + esc(w.date) + '</div><div style="flex:1;padding:3px 8px">' + esc(w.range) + '</div></div>'; }).join('');
-    var travelRowsHtml = pvTravel.map(function (t) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(t.names) + '</div><div style="flex:1;border-right:1px solid #e2e2e2;padding:3px 8px">' + esc(t.range) + '</div><div style="width:84px;padding:3px 8px">' + esc(t.km) + '</div></div>'; }).join('');
+    var workRowsHtml = pvWork.map(function (w) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(w.names) + '</div><div style="width:84px;border-right:1px solid #e2e2e2;padding:3px 6px">' + esc(w.date) + '</div><div style="flex:1;border-right:1px solid #e2e2e2;padding:3px 8px">' + esc(w.range) + '</div><div style="width:120px;padding:3px 8px">' + esc(w.dur) + '</div></div>'; }).join('');
+    var travelRowsHtml = pvTravel.map(function (t) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 6px;font-weight:700">' + esc(t.names) + '</div><div style="flex:1;border-right:1px solid #e2e2e2;padding:3px 8px">' + esc(t.range) + '</div><div style="width:120px;border-right:1px solid #e2e2e2;padding:3px 8px">' + esc(t.dur) + '</div><div style="width:64px;padding:3px 6px;white-space:nowrap">' + esc(t.km) + '</div></div>'; }).join('');
     var confirmHtml = (r.confirmItems || []).map(function (it) { return '<div style="display:flex;border-bottom:1px solid #ccc"><div style="flex:1;padding:3px 5px;border-right:1px solid #ccc">' + esc(it.label) + '</div><div style="width:30px;text-align:center;padding:3px 0;font-weight:700">' + esc(it.value || '') + '</div></div>'; }).join('');
 
     var kaninCell = '<span style="position:absolute;top:2px;left:4px;font:700 7px \'Noto Sans JP\',sans-serif;color:#555">' + (r.type === 'LW' ? '製造' : 'TSC') + '</span>' +
@@ -938,7 +993,7 @@
       // work time
       '<div style="display:flex;border-bottom:1px solid #111;font:600 9.5px \'Noto Sans JP\',sans-serif"><div style="width:70px;border-right:1px solid #111;padding:4px 5px;background:#f7f7f7;display:flex;align-items:center">作業時間</div><div style="flex:1">' + workRowsHtml + '<div style="display:flex;background:#f7f7f7"><div style="flex:1;padding:3px 6px;text-align:right;font-weight:700">作業時間 合計</div><div style="width:120px;border-left:1px solid #ccc;padding:3px 8px;font-weight:700">' + fmtHM(allWorkM) + '</div></div></div></div>' +
       // travel time
-      '<div style="display:flex;border-bottom:2px solid #111;font:600 9.5px \'Noto Sans JP\',sans-serif"><div style="width:70px;border-right:1px solid #111;padding:4px 5px;background:#f7f7f7;display:flex;align-items:center">移動時間</div><div style="flex:1">' + travelRowsHtml + '<div style="display:flex;background:#f7f7f7"><div style="flex:1;padding:3px 6px;text-align:right;font-weight:700">移動時間 合計</div><div style="width:120px;border-left:1px solid #ccc;padding:3px 8px;font-weight:700">' + fmtHM(allTravelM) + '</div></div></div></div>' +
+      '<div style="display:flex;border-bottom:2px solid #111;font:600 9.5px \'Noto Sans JP\',sans-serif"><div style="width:70px;border-right:1px solid #111;padding:4px 5px;background:#f7f7f7;display:flex;align-items:center">移動時間</div><div style="flex:1">' + travelRowsHtml + '<div style="display:flex;background:#f7f7f7"><div style="flex:1;padding:3px 6px;text-align:right;font-weight:700">' + (kmAll ? '走行距離 合計 ' + kmAll + ' Km　／　' : '') + '移動時間 合計</div><div style="width:120px;border-left:1px solid #ccc;padding:3px 8px;font-weight:700">' + fmtHM(allTravelM) + '</div><div style="width:64px;border-left:1px solid #ccc"></div></div></div></div>' +
       // 総時間（作業＋移動）。日別の「計」バッジを廃し、総計を1行にまとめて右寄せ表示。
       '<div style="border-bottom:2px solid #111;background:#f7f7f7;padding:4px 10px;text-align:right;font:700 10px \'Noto Sans JP\',sans-serif">総時間：' + fmtHM(allWorkM + allTravelM) + '</div>' +
       // approve
@@ -1405,6 +1460,13 @@
     fsOneDay: function () { var ed = S.edit; if (!ed) return; silentSet(ed.scope, function (o) { o.yoteibiEnd = ''; return o; }); render(); },
     fsWhich: function (d) { var ed = S.edit; if (!ed) return; setState({ edit: Object.assign({}, ed, { which: d.w }) }); },
     fsDir: function (d) { var ed = S.edit; if (!ed) return; fsSetRowField(ed.scope, fsRowRef(ed.id), 'dir', d.val); render(); },
+    fsBreak: function (d) {
+      var ed = S.edit; if (!ed) return; var ref = fsRowRef(ed.id), manual = d.val !== 'auto';
+      fsSetRowField(ed.scope, ref, 'kyukeiManual', manual);
+      fsSetRowField(ed.scope, ref, 'kyukei', manual ? d.val : '');
+      var oth = document.getElementById('fs-in-kyukei'); if (oth) oth.value = '';
+      refreshRowPanel();
+    },
     fsClearTime: function () { var ed = S.edit; if (!ed) return; var ref = fsRowRef(ed.id); fsSetRowField(ed.scope, ref, 'start', ''); fsSetRowField(ed.scope, ref, 'end', ''); render(); },
     fsDelRow: function () {
       var ed = S.edit; if (!ed) return; var ref = fsRowRef(ed.id);
